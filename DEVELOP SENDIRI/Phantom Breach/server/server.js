@@ -1,0 +1,624 @@
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
+import { generateRoomCode, rooms } from "./roomManager.js";
+
+const matchmakingQueue = [];
+const playersInQueue = new Set();
+const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: { origin: "*" },
+});
+
+const roomIntervals = {};
+const disconnectTimers = {}; 
+const ROOM_IDLE_EXPIRE = 20000;   
+const ROOM_GAME_EXPIRE = 60000;   
+
+setInterval(() => {
+  const now = Date.now();
+
+  for (const code in rooms) {
+    const room = rooms[code];
+    if (!room || !room.createdAt) continue;
+
+    if (!room.currentTurn && now - room.createdAt > ROOM_IDLE_EXPIRE) {
+      console.log("🧹 HAPUS ROOM (IDLE):", code);
+      cleanRoom(code);
+      continue;
+    }
+
+    if (room.currentTurn && now - room.createdAt > ROOM_GAME_EXPIRE) {
+      console.log("💀 GAME KELEBIHAN WAKTU:", code);
+
+      io.to(code).emit("gameOver", {
+        winner: room.host,
+        reason: "timeout",
+        scores: {},
+      });
+
+      cleanRoom(code);
+      continue;
+    }
+  }
+}, 10000);
+
+function cleanRoom(code) {
+  const room = rooms[code];
+  if (!room) return;
+
+  console.log("🧹 CLEAN ROOM:", code);
+
+  if (roomIntervals[code]) {
+    clearInterval(roomIntervals[code]);
+    delete roomIntervals[code];
+  }
+
+  if (room.placementInterval) {
+    clearInterval(room.placementInterval);
+    room.placementInterval = null;
+  }
+
+  if (room.host && disconnectTimers[room.host]) {
+    clearTimeout(disconnectTimers[room.host]);
+    delete disconnectTimers[room.host];
+  }
+
+  if (room.guest && disconnectTimers[room.guest]) {
+    clearTimeout(disconnectTimers[room.guest]);
+    delete disconnectTimers[room.guest];
+  }
+
+  delete rooms[code];
+}
+
+function startGameLoop(roomCode) {
+  if (roomIntervals[roomCode]) {
+    clearInterval(roomIntervals[roomCode]);
+  }
+  const room = rooms[roomCode];
+
+  room.timeLeft = 15;
+  room.currentTurn = room.host;
+
+  io.to(roomCode).emit("game_tick", {
+    timeLeft: room.timeLeft,
+    currentTurn: room.currentTurn,
+  });
+
+  roomIntervals[roomCode] = setInterval(() => {
+    room.timeLeft--;
+
+    if (room.timeLeft <= 0) {
+      room.timeLeft = 15;
+
+
+      const nextTurn = room.currentTurn === room.host ? room.guest : room.host;
+      room.currentTurn = nextTurn;
+
+      room.hasAttacked = false;
+    }
+
+    io.to(roomCode).emit("game_tick", {
+      timeLeft: room.timeLeft,
+      currentTurn: room.currentTurn,
+    });
+  }, 1000);
+}
+
+function startPlacementTimer(roomCode) {
+  const room = rooms[roomCode];
+  if (!room) return;
+
+  const duration = 30;
+
+  room.placementTimeLeft = duration;
+
+  room.placementInterval = setInterval(() => {
+    const currentRoom = rooms[roomCode];
+    if (!currentRoom) return;
+
+    currentRoom.placementTimeLeft--;
+
+    io.to(roomCode).emit("placementTick", {
+      timeLeft: currentRoom.placementTimeLeft,
+    });
+
+    if (currentRoom.placementTimeLeft <= 0) {
+      clearInterval(currentRoom.placementInterval);
+      currentRoom.placementInterval = null;
+
+      console.log("⏰ TIMER HABIS");
+
+      io.to(roomCode).emit("startGame", {
+        roomCode,
+        ships: currentRoom.ships,
+      });
+
+      startGameLoop(roomCode);
+    }
+  }, 1000);
+} 
+function isAllShipsDestroyed(ships, hits) {
+  for (const ship of ships) {
+    const w = ship.vertical ? ship.height : ship.width;
+    const h = ship.vertical ? ship.width : ship.height;
+
+    for (let i = 0; i < w; i++) {
+      for (let j = 0; j < h; j++) {
+        const sx = ship.x + i;
+        const sy = ship.y + j;
+
+        const key = `${sx},${sy}`;
+
+        if (!hits.has(key)) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+function buildScore(room, playerId, isWinner = false) {
+  const s = room.scores[playerId] || {
+    totalAttack: 0,
+    hitCount: 0,
+    missCount: 0,
+  };
+
+  const total = s.hitCount + s.missCount;
+  const accuracy = total > 0 ? Math.round((s.hitCount / total) * 100) : 0;
+
+  let score = s.hitCount * 10;
+
+  if (isWinner) {
+    score += 50;
+  }
+
+  return {
+    totalAttack: s.totalAttack,
+    hitCount: s.hitCount,
+    missCount: s.missCount,
+    accuracy,
+    score,
+  };
+}
+
+io.on("connection", (socket) => {
+  console.log("USER CONNECT:", socket.id);
+  for (const code in rooms) {
+    const room = rooms[code];
+    if (!room.disconnectPlayer) continue;
+    if (room.disconnectPlayer.oldId !== socket.id) continue;
+
+    console.log("✅ RECONNECT KE ROOM:", code);
+
+    socket.join(code);
+    room.disconnectPlayer = null;
+    if (disconnectTimers[socket.id]) {
+      clearTimeout(disconnectTimers[socket.id]);
+      delete disconnectTimers[socket.id];
+    }
+    io.to(code).emit("playerReconnected", {
+      player: socket.id,
+    });
+
+    break;
+  }
+  socket.on("createRoom", () => {
+    const code = generateRoomCode();
+
+    rooms[code] = {
+      code,
+      host: socket.id,
+      guest: null,
+      playersReady: 0,
+      ships: {},
+      hits: {},
+      scores: {},
+      currentTurn: null,
+      hasAttacked: false,
+      timeLeft: 15,
+      createdAt: Date.now(), // 🔥 WAJIB
+      disconnectPlayer: null,
+    };
+
+    socket.join(code);
+    socket.emit("roomCreated", code);
+
+    console.log("ROOM CREATED:", code);
+  });
+
+  socket.on("joinRoom", (code) => {
+    const room = rooms[code];
+
+    if (!room) {
+      socket.emit("roomNotFound");
+      return;
+    }
+
+    if (room.guest) {
+      socket.emit("roomFull");
+      return;
+    }
+
+    room.guest = socket.id;
+    socket.join(code);
+
+    socket.emit("roomJoined", code);
+    io.to(room.host).emit("playerJoined", code);
+
+    setTimeout(() => {
+      io.to(code).emit("goToPlacement", {
+        roomCode: code,
+        timeLeft: 30,
+      });
+
+      startPlacementTimer(code);
+    }, 500);
+  });
+
+  socket.on("findMatch", () => {
+    for (let i = matchmakingQueue.length - 1; i >= 0; i--) {
+      if (matchmakingQueue[i].id === socket.id) {
+        matchmakingQueue.splice(i, 1);
+      }
+    }
+
+    if (playersInQueue.has(socket.id)) {
+      console.log("⚠️ SUDAH DI QUEUE");
+      return;
+    }
+
+    playersInQueue.add(socket.id);
+    matchmakingQueue.push(socket);
+
+    console.log("QUEUE:", matchmakingQueue.length);
+
+    tryMatch();
+  });
+
+  function tryMatch() {
+    while (matchmakingQueue.length >= 2) {
+      const p1 = matchmakingQueue.shift();
+      const p2 = matchmakingQueue.shift();
+
+      if (!p1 || !p2) return;
+      if (p1.id === p2.id) continue;
+
+      playersInQueue.delete(p1.id);
+      playersInQueue.delete(p2.id);
+
+      const code = generateRoomCode();
+
+      rooms[code] = {
+        code,
+        host: p1.id,
+        guest: p2.id,
+        playersReady: 0,
+        ships: {},
+        hits: {},
+        attackedCells: {},
+        scores: {},
+        currentTurn: null,
+        hasAttacked: false,
+        timeLeft: 15,
+        createdAt: Date.now(),
+        disconnectPlayer: null,
+      };
+
+      p1.join(code);
+      p2.join(code);
+
+      io.to(code).emit("matchFound", code);
+
+      setTimeout(() => {
+        io.to(code).emit("goToPlacement", {
+          roomCode: code,
+          timeLeft: 30,
+        });
+
+        startPlacementTimer(code);
+      }, 500);
+    }
+  }
+
+  socket.on("cancelMatch", () => {
+    for (const r of socket.rooms) {
+      if (r !== socket.id) {
+        socket.leave(r);
+      }
+    }
+    playersInQueue.delete(socket.id);
+
+    const index = matchmakingQueue.findIndex((s) => s.id === socket.id);
+    if (index !== -1) {
+      matchmakingQueue.splice(index, 1);
+    }
+
+    console.log("❌ CANCEL MATCH:", socket.id);
+  });
+  socket.on("playerReady", ({ roomCode, ships }) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+
+    room.ships[socket.id] = ships;
+    if (!room.readyPlayers) room.readyPlayers = new Set();
+
+    if (!room.readyPlayers.has(socket.id)) {
+      room.readyPlayers.add(socket.id);
+      room.playersReady++;
+    }
+
+    console.log("READY:", room.playersReady);
+
+    if (room.playersReady === 2) {
+      io.to(roomCode).emit("startGame", {
+        roomCode,
+        ships: room.ships,
+      });
+
+      startGameLoop(roomCode);
+    }
+  });
+
+  socket.on("attack", ({ roomCode, x, y, width, height }) => {
+    const room = rooms[roomCode];
+    if (!room) return;
+
+    if (room.lock) return;
+    room.lock = true;
+
+    try {
+      const player = socket.id;
+      if (room.currentTurn !== player) {
+        room.hasAttacked = false;
+        return;
+      }
+
+      if (room.hasAttacked) {
+        return;
+      }
+
+      if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number" || typeof height !== "number") {
+        console.log("❌ INVALID DATA");
+        room.hasAttacked = false;
+        return;
+      }
+      for (let dx = 0; dx < width; dx++) {
+        for (let dy = 0; dy < height; dy++) {
+          const tx = x + dx;
+          const ty = y + dy;
+
+          if (tx < 0 || tx >= 8 || ty < 0 || ty >= 6) {
+            console.log("❌ OUT OF GRID");
+
+            room.hasAttacked = false;
+
+            socket.emit("attackInvalid", {
+              reason: "OUT_OF_GRID",
+            });
+
+            return;
+          }
+        }
+      }
+      if (!room.scores[player]) {
+        room.scores[player] = {
+          totalAttack: 0,
+          hitCount: 0,
+          missCount: 0,
+        };
+      }
+
+      room.hasAttacked = true;
+
+      const enemy = player === room.host ? room.guest : room.host;
+      const enemyShips = room.ships[enemy];
+
+      if (!enemyShips) {
+        console.log("❌ ENEMY SHIPS NULL");
+        room.hasAttacked = false;
+        return;
+      }
+      if (!room.hits) room.hits = {};
+      if (!room.hits[enemy]) room.hits[enemy] = new Set();
+
+      if (!room.attackedCells) room.attackedCells = {};
+      if (!room.attackedCells[enemy]) room.attackedCells[enemy] = new Set();
+      let allBlocked = true;
+
+      for (let dx = 0; dx < width; dx++) {
+        for (let dy = 0; dy < height; dy++) {
+          const key = `${x + dx},${y + dy}`;
+          if (!room.attackedCells[enemy].has(key)) {
+            allBlocked = false;
+          }
+        }
+      }
+
+      if (allBlocked) {
+        console.log("❌ AREA SUDAH DISERANG");
+
+        room.hasAttacked = false;
+
+        socket.emit("attackInvalid", {
+          reason: "ALREADY_ATTACKED",
+        });
+
+        return;
+      }
+      const results = [];
+
+      for (let dx = 0; dx < width; dx++) {
+        for (let dy = 0; dy < height; dy++) {
+          const tx = x + dx;
+          const ty = y + dy;
+
+          const key = `${tx},${ty}`;
+          if (room.attackedCells[enemy].has(key)) {
+            room.scores[player].missCount++;
+            room.scores[player].totalAttack++;
+            continue;
+          }
+
+          room.attackedCells[enemy].add(key);
+
+          let hit = false;
+
+          for (const ship of enemyShips) {
+            const w = ship.vertical ? ship.height : ship.width;
+            const h = ship.vertical ? ship.width : ship.height;
+
+            for (let i = 0; i < w; i++) {
+              for (let j = 0; j < h; j++) {
+                const sx = ship.x + i;
+                const sy = ship.y + j;
+
+                if (sx === tx && sy === ty) {
+                  hit = true;
+                  break;
+                }
+              }
+              if (hit) break;
+            }
+          }
+
+          if (hit) {
+            room.hits[enemy].add(key);
+            room.scores[player].hitCount++;
+          } else {
+            room.scores[player].missCount++;
+          }
+
+          room.scores[player].totalAttack++;
+
+          results.push({ x: tx, y: ty, hit });
+        }
+      }
+      function countShipCells(ships) {
+        let total = 0;
+
+        for (const ship of ships) {
+          const w = ship.vertical ? ship.height : ship.width;
+          const h = ship.vertical ? ship.width : ship.height;
+          total += w * h;
+        }
+
+        return total;
+      }
+
+      const totalCells = countShipCells(enemyShips);
+      const hitCount = room.hits[enemy].size;
+
+      const enemyDestroyed = hitCount >= totalCells;
+      socket.emit("attackResult", {
+        cells: results,
+        target: "enemy",
+        attackerId: player,
+      });
+
+      io.to(enemy).emit("attackResult", {
+        cells: results,
+        target: "self",
+        attackerId: player,
+      });
+      if (enemyDestroyed) {
+        if (roomIntervals[roomCode]) {
+          clearInterval(roomIntervals[roomCode]);
+          delete roomIntervals[roomCode];
+        }
+
+        setTimeout(() => {
+          io.to(roomCode).emit("gameOver", {
+            winner: player,
+            scores: {
+              [room.host]: buildScore(room, room.host, room.host === player),
+              [room.guest]: buildScore(room, room.guest, room.guest === player),
+            },
+          });
+
+          if (roomIntervals[roomCode]) {
+            clearInterval(roomIntervals[roomCode]);
+            delete roomIntervals[roomCode];
+          }
+
+          cleanRoom(roomCode);
+        }, 2000);
+
+        return;
+      }
+      const nextTurn = player === room.host ? room.guest : room.host;
+
+      setTimeout(() => {
+        room.hasAttacked = false;
+        room.currentTurn = nextTurn;
+        room.timeLeft = 15;
+
+        io.to(roomCode).emit("game_tick", {
+          timeLeft: room.timeLeft,
+          currentTurn: room.currentTurn,
+        });
+      }, 2000);
+    } catch (err) {
+      console.error("🔥 ERROR ATTACK:", err);
+    } finally {
+      room.lock = false;
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ DISCONNECT:", socket.id);
+    playersInQueue.delete(socket.id);
+
+    const index = matchmakingQueue.findIndex((s) => s.id === socket.id);
+    if (index !== -1) {
+      matchmakingQueue.splice(index, 1);
+    }
+    for (const code in rooms) {
+      const room = rooms[code];
+
+      if (room.host === socket.id || room.guest === socket.id) {
+        console.log("⏳ WAIT 10 DETIK...");
+
+        room.disconnectPlayer = {
+          oldId: socket.id,
+        };
+        if (disconnectTimers[socket.id]) {
+          clearTimeout(disconnectTimers[socket.id]);
+        }
+        disconnectTimers[socket.id] = setTimeout(() => {
+          console.log("💀 AUTO LOSE");
+
+          const winner = room.host === socket.id ? room.guest : room.host;
+
+          if (!winner) return;
+
+          const winnerScore = buildScore(room, winner, true);
+          const loserScore = buildScore(room, socket.id, false);
+          winnerScore.score = 150;
+          io.to(code).emit("gameOver", {
+            winner,
+            scores: {
+              [winner]: winnerScore,
+              [socket.id]: loserScore,
+            },
+          });
+          if (roomIntervals[code]) {
+            clearInterval(roomIntervals[code]);
+            delete roomIntervals[code];
+          }
+
+          cleanRoom(code);
+        }, 10000); // ⏱️ 10 DETIK
+      }
+    }
+  });
+});
+server.listen(3000, () => {
+  console.log("🚀 SERVER RUNNING ON 3000");
+});
