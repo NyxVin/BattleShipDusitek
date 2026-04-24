@@ -13,9 +13,8 @@ const io = new Server(server, {
 });
 
 const roomIntervals = {};
-const disconnectTimers = {}; 
-const ROOM_IDLE_EXPIRE = 20000;   
-const ROOM_GAME_EXPIRE = 60000;   
+const disconnectTimers = {};
+const ROOM_IDLE_EXPIRE = 20000;
 
 setInterval(() => {
   const now = Date.now();
@@ -24,24 +23,13 @@ setInterval(() => {
     const room = rooms[code];
     if (!room || !room.createdAt) continue;
 
-    if (!room.currentTurn && now - room.createdAt > ROOM_IDLE_EXPIRE) {
-      console.log("🧹 HAPUS ROOM (IDLE):", code);
+    const roomSize = io.sockets.adapter.rooms.get(code)?.size || 0;
+
+    if (roomSize === 0) {
+      console.log("🧹 ROOM KOSONG, HAPUS:", code);
       cleanRoom(code);
-      continue;
     }
 
-    if (room.currentTurn && now - room.createdAt > ROOM_GAME_EXPIRE) {
-      console.log("💀 GAME KELEBIHAN WAKTU:", code);
-
-      io.to(code).emit("gameOver", {
-        winner: room.host,
-        reason: "timeout",
-        scores: {},
-      });
-
-      cleanRoom(code);
-      continue;
-    }
   }
 }, 10000);
 
@@ -94,7 +82,6 @@ function startGameLoop(roomCode) {
     if (room.timeLeft <= 0) {
       room.timeLeft = 15;
 
-
       const nextTurn = room.currentTurn === room.host ? room.guest : room.host;
       room.currentTurn = nextTurn;
 
@@ -118,7 +105,10 @@ function startPlacementTimer(roomCode) {
 
   room.placementInterval = setInterval(() => {
     const currentRoom = rooms[roomCode];
-    if (!currentRoom) return;
+    if (!currentRoom) {
+      clearInterval(room.placementInterval);
+      return;
+    }
 
     currentRoom.placementTimeLeft--;
 
@@ -132,6 +122,8 @@ function startPlacementTimer(roomCode) {
 
       console.log("⏰ TIMER HABIS");
 
+      currentRoom.phase = "battle"; // 🔥 TAMBAHAN WAJIB
+
       io.to(roomCode).emit("startGame", {
         roomCode,
         ships: currentRoom.ships,
@@ -140,7 +132,7 @@ function startPlacementTimer(roomCode) {
       startGameLoop(roomCode);
     }
   }, 1000);
-} 
+}
 function isAllShipsDestroyed(ships, hits) {
   for (const ship of ships) {
     const w = ship.vertical ? ship.height : ship.width;
@@ -214,8 +206,8 @@ io.on("connection", (socket) => {
 
     rooms[code] = {
       code,
-      host: socket.id,
-      guest: null,
+      host: p1.id,
+      guest: p2.id,
       playersReady: 0,
       ships: {},
       hits: {},
@@ -223,8 +215,10 @@ io.on("connection", (socket) => {
       currentTurn: null,
       hasAttacked: false,
       timeLeft: 15,
-      createdAt: Date.now(), // 🔥 WAJIB
+      createdAt: Date.now(),
       disconnectPlayer: null,
+
+      phase: "waiting", // 🔥 TAMBAHAN
     };
 
     socket.join(code);
@@ -302,13 +296,14 @@ io.on("connection", (socket) => {
         playersReady: 0,
         ships: {},
         hits: {},
-        attackedCells: {},
         scores: {},
         currentTurn: null,
         hasAttacked: false,
         timeLeft: 15,
         createdAt: Date.now(),
         disconnectPlayer: null,
+
+        phase: "waiting", // 🔥 TAMBAHAN
       };
 
       p1.join(code);
@@ -317,6 +312,7 @@ io.on("connection", (socket) => {
       io.to(code).emit("matchFound", code);
 
       setTimeout(() => {
+
         io.to(code).emit("goToPlacement", {
           roomCode: code,
           timeLeft: 30,
@@ -357,6 +353,16 @@ io.on("connection", (socket) => {
     console.log("READY:", room.playersReady);
 
     if (room.playersReady === 2) {
+      // 🔥 1. MATIKAN TIMER PLACEMENT
+      if (room.placementInterval) {
+        clearInterval(room.placementInterval);
+        room.placementInterval = null;
+      }
+
+      // 🔥 2. SET PHASE
+      room.phase = "battle";
+
+      // 🔥 3. START GAME
       io.to(roomCode).emit("startGame", {
         roomCode,
         ships: room.ships,

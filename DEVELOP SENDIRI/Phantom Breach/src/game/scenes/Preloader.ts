@@ -11,10 +11,7 @@ export class Preloader extends Scene {
     this.load.image("background", "assets/background.png");
 
     this.load.image("tile_water", "assets/tile_water.png");
-    this.load.image("hero1", "assets/spaceship1.png");
-    this.load.image("hero2", "assets/spaceship2.png");
-    this.load.image("hero3", "assets/spaceship3.png");
-    this.load.image("hero4", "assets/spaceship4.png");
+
 
     this.load.spritesheet("hit", "assets/hit.png", {
       frameWidth: 32,

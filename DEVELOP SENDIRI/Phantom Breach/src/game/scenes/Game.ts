@@ -38,6 +38,7 @@ export class Game extends Scene {
   targetMarks: Phaser.GameObjects.Image[] = [];
   gameData: any;
   selectedShipIndex: number = -1;
+  lastUsedShipIndex: number = -1;
   isVerticalAttack: boolean = false;
 
   shipsUI = [
@@ -388,13 +389,27 @@ export class Game extends Scene {
       this.isMyTurn = data.currentTurn === socket.id;
       this.turnTime = data.timeLeft;
 
-      if (prevTurn !== data.currentTurn) {
-        if (this.isMyTurn) {
-          this.showTurnPopup("GILIRAN  KAMU", "#D9A909");
-        } else {
-          this.showTurnPopup("LAWAN", "#FF0000");
-        }
+if (prevTurn !== data.currentTurn) {
+
+  // 🔥 TAMBAHAN: TURUNKAN COOLDOWN DI SINI
+  this.shipsUI.forEach((ship) => {
+    if (ship.cooldownActive && ship.cooldownLeft > 0) {
+      ship.cooldownLeft--;
+
+      if (ship.cooldownLeft <= 0) {
+        ship.cooldownLeft = 0;
+        ship.cooldownActive = false;
       }
+    }
+  });
+
+  // popup tetap
+  if (this.isMyTurn) {
+    this.showTurnPopup("GILIRAN KAMU", "#D9A909");
+  } else {
+    this.showTurnPopup("GILIRAN LAWAN", "#FF0000");
+  }
+}
     });
 
     socket.on("attackResult", ({ cells, target, attackerId }) => {
@@ -468,8 +483,7 @@ export class Game extends Scene {
               });
 
               this.hitMarks.push(hitMark);
-            }
-            else {
+            } else {
               const missMark = this.add
                 .sprite(px, py, "miss")
                 .setDisplaySize(this.cellSize * 0.7, this.cellSize * 0.7)
@@ -497,16 +511,16 @@ export class Game extends Scene {
 
             if (pending === 0 && !soundPlayed) {
               if (attackerId === socket.id) {
-                this.shipsUI.forEach((ship) => {
-                  if (ship.cooldownActive && ship.cooldownLeft > 0) {
-                    ship.cooldownLeft--;
+                if (attackerId === socket.id) {
+                  const ship = this.shipsUI[this.lastUsedShipIndex];
+
+                  if (ship && ship.cooldown > 0) {
+                    ship.cooldownActive = true;
+                    ship.cooldownLeft = ship.cooldown;
                   }
 
-                  if (ship.cooldownLeft <= 0) {
-                    ship.cooldownLeft = 0;
-                    ship.cooldownActive = false;
-                  }
-                });
+                  this.lastUsedShipIndex = -1;
+                }
               }
               soundPlayed = true;
               if (isAnyHit) {
@@ -540,7 +554,7 @@ export class Game extends Scene {
       this.targetMarks = [];
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
-
+      this.lastUsedShipIndex = -1;
       this.showTurnPopup("INVALID", "#FF0000");
     });
 
@@ -720,8 +734,7 @@ export class Game extends Scene {
 
     this.previewRects.forEach((r) => r.destroy());
     this.previewRects = [];
-    ship.cooldownLeft = ship.cooldown;
-    ship.cooldownActive = true;
+    this.lastUsedShipIndex = this.selectedShipIndex;
     this.selectedShipIndex = -1;
     socket.emit("attack", {
       roomCode: this.roomCode,
