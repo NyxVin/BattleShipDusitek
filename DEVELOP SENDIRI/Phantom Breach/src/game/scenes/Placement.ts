@@ -70,7 +70,7 @@ export class Placement extends Scene {
     });
     const timerBG = this.add.image(120, 0, "bg_timer").setScale(0.4);
     const headerTimerText = this.add
-      .text(120, 0, "30", {
+      .text(120, 0, "", {
         fontSize: "20px",
         fontFamily: "Lilita One",
         color: "#D84315",
@@ -89,7 +89,8 @@ export class Placement extends Scene {
         vertical: s.vertical,
       }));
     };
-    let currentTime = data?.timeLeft || 30;
+    const cfg = this.registry.get("gameConfig");
+    let currentTime = data?.timeLeft ?? cfg.config.gameplay.placement_time;
     headerTimerText.setText(currentTime.toString());
     socket.off("placementTick");
     socket.on("placementTick", (data: any) => {

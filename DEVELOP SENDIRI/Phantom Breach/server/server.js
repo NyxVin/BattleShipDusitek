@@ -2,9 +2,17 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import { generateRoomCode, rooms } from "./roomManager.js";
-
+let configLocked = false;
 const matchmakingQueue = [];
 const playersInQueue = new Set();
+let GAME_CONFIG = {
+  turn_time: 15,
+  placement_time: 30,
+  score: {
+    hit: 10,
+    win_bonus: 50,
+  },
+};
 const app = express();
 const server = http.createServer(app);
 
@@ -68,7 +76,7 @@ function startGameLoop(roomCode) {
   }
   const room = rooms[roomCode];
 
-  room.timeLeft = 15;
+  room.timeLeft = GAME_CONFIG.turn_time;
   room.currentTurn = room.host;
 
   io.to(roomCode).emit("game_tick", {
@@ -80,7 +88,7 @@ function startGameLoop(roomCode) {
     room.timeLeft--;
 
     if (room.timeLeft <= 0) {
-      room.timeLeft = 15;
+      room.timeLeft = GAME_CONFIG.turn_time;
 
       const nextTurn = room.currentTurn === room.host ? room.guest : room.host;
       room.currentTurn = nextTurn;
@@ -99,7 +107,7 @@ function startPlacementTimer(roomCode) {
   const room = rooms[roomCode];
   if (!room) return;
 
-  const duration = 30;
+  const duration = GAME_CONFIG.placement_time;
 
   room.placementTimeLeft = duration;
 
@@ -165,10 +173,10 @@ function buildScore(room, playerId, isWinner = false) {
   const total = s.hitCount + s.missCount;
   const accuracy = total > 0 ? Math.round((s.hitCount / total) * 100) : 0;
 
-  let score = s.hitCount * 10;
+  let score = s.hitCount * GAME_CONFIG.score.hit;
 
   if (isWinner) {
-    score += 50;
+    score += GAME_CONFIG.score.win_bonus;
   }
 
   return {
@@ -214,7 +222,7 @@ io.on("connection", (socket) => {
       scores: {},
       currentTurn: null,
       hasAttacked: false,
-      timeLeft: 15,
+      timeLeft: GAME_CONFIG.turn_time,
       createdAt: Date.now(),
       disconnectPlayer: null,
 
@@ -249,7 +257,7 @@ io.on("connection", (socket) => {
     setTimeout(() => {
       io.to(code).emit("goToPlacement", {
         roomCode: code,
-        timeLeft: 30,
+        timeLeft: GAME_CONFIG.placement_time,
       });
 
       startPlacementTimer(code);
@@ -299,7 +307,7 @@ io.on("connection", (socket) => {
         scores: {},
         currentTurn: null,
         hasAttacked: false,
-        timeLeft: 15,
+        timeLeft: GAME_CONFIG.turn_time,
         createdAt: Date.now(),
         disconnectPlayer: null,
 
@@ -315,7 +323,7 @@ io.on("connection", (socket) => {
 
         io.to(code).emit("goToPlacement", {
           roomCode: code,
-          timeLeft: 30,
+          timeLeft: GAME_CONFIG.placement_time,
         });
 
         startPlacementTimer(code);
@@ -563,7 +571,7 @@ io.on("connection", (socket) => {
       setTimeout(() => {
         room.hasAttacked = false;
         room.currentTurn = nextTurn;
-        room.timeLeft = 15;
+        room.timeLeft = GAME_CONFIG.turn_time;
 
         io.to(roomCode).emit("game_tick", {
           timeLeft: room.timeLeft,
@@ -606,7 +614,7 @@ io.on("connection", (socket) => {
 
           const winnerScore = buildScore(room, winner, true);
           const loserScore = buildScore(room, socket.id, false);
-          winnerScore.score = 150;
+          winnerScore.score = GAME_CONFIG.score.win_bonus;
           io.to(code).emit("gameOver", {
             winner,
             scores: {
@@ -624,6 +632,26 @@ io.on("connection", (socket) => {
       }
     }
   });
+
+socket.on("syncConfig", (config) => {
+  if (configLocked) return;
+
+  console.log("🔥 CONFIG MASUK:", config);
+
+  if (config?.gameplay) {
+    GAME_CONFIG.turn_time = config.gameplay.turn_time;
+    GAME_CONFIG.placement_time = config.gameplay.placement_time;
+  }
+
+   if (config?.score) {
+    GAME_CONFIG.score = config.score;
+  }
+
+  configLocked = true;
+
+  // 🔥 KIRIM KE SEMUA PLAYER
+  io.emit("configSync", GAME_CONFIG);
+});
 });
 server.listen(3000, () => {
   console.log("🚀 SERVER RUNNING ON 3000");

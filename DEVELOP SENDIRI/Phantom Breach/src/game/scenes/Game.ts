@@ -24,7 +24,7 @@ export class Game extends Scene {
 
   selectedCell: { x: number; y: number } | null = null;
 
-  turnTime: number = 15;
+  turnTime: number = 0;
   timerText!: Phaser.GameObjects.Text;
   turnText!: Phaser.GameObjects.Text;
   hitMarks: Phaser.GameObjects.Image[] = [];
@@ -58,6 +58,11 @@ export class Game extends Scene {
   }
 
   create() {
+    const cfg = this.registry.get("gameConfig");
+    this.turnTime = cfg.config.gameplay.turn_time;
+    this.shipsUI.forEach((ship) => {
+      ship.cooldown = cfg.config.gameplay.ship_cooldowns[ship.key] ?? 0;
+    });
     console.log("DPR:", window.devicePixelRatio);
     this.sfx = {
       misil: this.sound.add("misil"),
@@ -102,19 +107,19 @@ export class Game extends Scene {
     const header = this.add.container(centerX, 45);
     const panel = this.add.image(0, 0, "panel_top").setScale(0.5);
     const dot = this.add.circle(-130, 0, 5, 0xfacc15);
-    this.turnText = this.add.text(-117, -18, "IT'S TIME TO WAR", {
+    this.turnText = this.add.text(-117, -18, cfg.config.ui.header.title, {
       fontSize: "18px",
       fontFamily: "Lilita One",
       color: "#1E3A8A",
     });
-    const subtitle = this.add.text(-115, 3, "Pilih target untuk diserang!", {
+    const subtitle = this.add.text(-115, 3, cfg.config.ui.header.subtitle, {
       fontSize: "12px",
       fontFamily: "Lilita One",
       color: "#6B7280",
     });
     const timerBG = this.add.image(120, 0, "bg_timer").setScale(0.4);
     this.timerText = this.add
-      .text(120, 0, "15s", {
+      .text(120, 0, this.turnTime + "s", {
         fontSize: "20px",
         fontFamily: "Lilita One",
         color: "#D84315",
@@ -278,7 +283,7 @@ export class Game extends Scene {
 
       container.on("pointerdown", () => {
         if (ship.cooldownActive && ship.cooldownLeft > 0) {
-          this.showTurnPopup("COOLDOWN!", "#FF0000");
+          this.showTurnPopup(cfg.config.ui.text.cooldown, cfg.config.ui.colors.enemy);
           return;
         }
         this.selectedShipIndex = i;
@@ -318,7 +323,7 @@ export class Game extends Scene {
         const ship = this.shipsUI[this.selectedShipIndex];
 
         if (ship.cooldownActive && ship.cooldownLeft > 0) {
-          this.showTurnPopup("COOLDOWN!", "#FF0000");
+          this.showTurnPopup(cfg.config.ui.text.cooldown, cfg.config.ui.colors.enemy);
           return;
         }
 
@@ -389,27 +394,26 @@ export class Game extends Scene {
       this.isMyTurn = data.currentTurn === socket.id;
       this.turnTime = data.timeLeft;
 
-if (prevTurn !== data.currentTurn) {
+      if (prevTurn !== data.currentTurn) {
+        // 🔥 TAMBAHAN: TURUNKAN COOLDOWN DI SINI
+        this.shipsUI.forEach((ship) => {
+          if (ship.cooldownActive && ship.cooldownLeft > 0) {
+            ship.cooldownLeft--;
 
-  // 🔥 TAMBAHAN: TURUNKAN COOLDOWN DI SINI
-  this.shipsUI.forEach((ship) => {
-    if (ship.cooldownActive && ship.cooldownLeft > 0) {
-      ship.cooldownLeft--;
+            if (ship.cooldownLeft <= 0) {
+              ship.cooldownLeft = 0;
+              ship.cooldownActive = false;
+            }
+          }
+        });
 
-      if (ship.cooldownLeft <= 0) {
-        ship.cooldownLeft = 0;
-        ship.cooldownActive = false;
+        // popup tetap
+        if (this.isMyTurn) {
+          this.showTurnPopup(cfg.config.ui.text.turn, cfg.config.ui.colors.turn);
+        } else {
+          this.showTurnPopup(cfg.config.ui.text.enemy, cfg.config.ui.colors.enemy);
+        }
       }
-    }
-  });
-
-  // popup tetap
-  if (this.isMyTurn) {
-    this.showTurnPopup("GILIRAN KAMU", "#D9A909");
-  } else {
-    this.showTurnPopup("GILIRAN LAWAN", "#FF0000");
-  }
-}
     });
 
     socket.on("attackResult", ({ cells, target, attackerId }) => {
@@ -555,7 +559,7 @@ if (prevTurn !== data.currentTurn) {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
       this.lastUsedShipIndex = -1;
-      this.showTurnPopup("INVALID", "#FF0000");
+      this.showTurnPopup(cfg.config.ui.text.invalid, cfg.config.ui.colors.invalid);
     });
 
     socket.on("gameOver", (data) => {
@@ -676,7 +680,7 @@ if (prevTurn !== data.currentTurn) {
     const ship = this.shipsUI[this.selectedShipIndex];
     if (ship.cooldownActive && ship.cooldownLeft > 0) {
       console.log("❌ MASIH COOLDOWN (ATTACK)");
-      this.showTurnPopup("COOLDOWN!", "#FF0000");
+      this.showTurnPopup(cfg.config.ui.text.cooldown, cfg.config.ui.colors.enemy);
       return;
     }
     const w = this.isVerticalAttack ? ship.height : ship.width;
@@ -710,7 +714,7 @@ if (prevTurn !== data.currentTurn) {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
 
-      this.showTurnPopup("INVALID", "#FF0000");
+      this.showTurnPopup(cfg.config.ui.text.invalid, cfg.config.ui.colors.invalid);
       return;
     }
     if (!valid) {
@@ -723,7 +727,7 @@ if (prevTurn !== data.currentTurn) {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
 
-      this.showTurnPopup("INVALID", "#FF0000");
+      this.showTurnPopup(cfg.config.ui.text.invalid, cfg.config.ui.colors.invalid);
       return;
     }
     console.log("🔥 ATTACK DIKIRIM:", { x, y, w, h });
@@ -793,7 +797,7 @@ if (prevTurn !== data.currentTurn) {
     if (this.selectedShipIndex === -1) return;
 
     const ship = this.shipsUI[this.selectedShipIndex];
-
+    this.lastUsedShipIndex = this.selectedShipIndex;
     const w = this.isVerticalAttack ? ship.height : ship.width;
     const h = this.isVerticalAttack ? ship.width : ship.height;
 

@@ -8,25 +8,16 @@ export class Preloader extends Scene {
   init() {}
 
   preload() {
-    this.load.image("background", "assets/background.png");
+    const cfg = this.registry.get("gameConfig");
+    console.log("CONFIG MASUK:", cfg);
+    this.load.image("background", cfg.config.assets.background || "assets/background.png");
 
     this.load.image("tile_water", "assets/tile_water.png");
 
+    this.load.spritesheet("hit", cfg.config.assets.effects.hit || "assets/hit.png", { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet("miss", cfg.config.assets.effects.miss || "assets/miss.png", { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet("peluru", cfg.config.assets.effects.bullet || "assets/peluru.png", { frameWidth: 32, frameHeight: 32 });
 
-    this.load.spritesheet("hit", "assets/hit.png", {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
-
-    this.load.spritesheet("miss", "assets/miss.png", {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
-
-    this.load.spritesheet("peluru", "assets/peluru.png", {
-      frameWidth: 32,
-      frameHeight: 32,
-    });
     this.load.image("nama", "assets/namagame.png");
     this.load.image("nama2", "assets/namagame2.png");
     this.load.image("btn_random", "assets/btn_random.png");
@@ -67,10 +58,11 @@ export class Preloader extends Scene {
     this.load.image("hero_card", "assets/hero_card.png");
     this.load.image("hero_card_selected", "assets/hero_card_selected.png");
 
-    this.load.image("spaceship1", "assets/spaceship1.png");
-    this.load.image("spaceship2", "assets/spaceship2.png");
-    this.load.image("spaceship3", "assets/spaceship3.png");
-    this.load.image("spaceship4", "assets/spaceship4.png");
+    this.load.image("spaceship1", cfg.config.assets.ships.spaceship1 || "assets/spaceship1.png");
+    this.load.image("spaceship2", cfg.config.assets.ships.spaceship2 || "assets/spaceship2.png");
+    this.load.image("spaceship3", cfg.config.assets.ships.spaceship3 || "assets/spaceship3.png");
+    this.load.image("spaceship4", cfg.config.assets.ships.spaceship4 || "assets/spaceship4.png");
+
     this.load.image("panel_top", "/assets/panel_top.png");
     this.load.image("bg_timer", "/assets/bg_timer.png");
     this.load.image("tab_lawan_active", "/assets/tab_lawan_active.png");
@@ -91,14 +83,14 @@ export class Preloader extends Scene {
     this.load.image("grid_range2", "assets/grid_range2.png");
     this.load.image("grid_range3", "assets/grid_range3.png");
     this.load.image("grid_range4", "assets/grid_range4.png");
-    this.load.image("target", "assets/target.png");
+    this.load.image("target", cfg.config.assets.effects.target || "assets/target.png");
 
-    this.load.audio("winner","assets/sound/winner.mp3");
-    this.load.audio("lose","assets/sound/lose.mp3");
-    this.load.audio("soundgame","assets/sound/soundgame.mp3");
-    this.load.audio("explosion","assets/sound/explosion.mp3");
-    this.load.audio("misil","assets/sound/misil.mp3");
-    this.load.audio("waterboom","assets/sound/waterboom.mp3");
+this.load.audio("winner", cfg.config.assets.audio.win || "assets/sound/winner.mp3");
+this.load.audio("lose", cfg.config.assets.audio.lose || "assets/sound/lose.mp3");
+this.load.audio("soundgame", cfg.config.assets.audio.bgm || "assets/sound/soundgame.mp3");
+this.load.audio("explosion", cfg.config.assets.audio.explosion || "assets/sound/explosion.mp3");
+this.load.audio("misil", cfg.config.assets.audio.shoot || "assets/sound/misil.mp3");
+this.load.audio("waterboom", cfg.config.assets.audio.miss || "assets/sound/waterboom.mp3");
   }
 
   create() {
