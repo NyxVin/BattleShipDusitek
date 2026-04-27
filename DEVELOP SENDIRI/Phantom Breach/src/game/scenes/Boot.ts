@@ -1,7 +1,9 @@
 import { Scene } from "phaser";
 import { DEFAULT_CONFIG } from "../config/defaultConfig";
 import { socket } from "../socket";
-import axios from "axios";
+import { mergeConfig } from "../config/mergeConfig";
+import { loadConfig } from "../config/loadConfig";
+
 export class Boot extends Scene {
   constructor() {
     super("Boot");
@@ -9,56 +11,33 @@ export class Boot extends Scene {
 
   preload() {}
 
-  create() {
-    axios
-      .get("/config.json")
-      .then((res) => {
-        const data = res.data;
+  async create() {
+    // 🔥 1. LOAD (dari CMS / config.json)
+    const cmsData = await loadConfig();
 
-        console.log("🔥 CONFIG CMS:", data);
+    let finalConfig;
 
-        // ✅ 1. LANGSUNG PAKAI CMS (JANGAN NUNGGU SERVER)
-        this.registry.set("gameConfig", data);
+    if (cmsData) {
+      console.log("🔥 CONFIG CMS:", cmsData);
 
-        // ✅ 2. KIRIM KE SERVER (BIAR SERVER IKUT)
-        socket.emit("syncConfig", data.config);
+      // 🔥 2. MERGE
+      finalConfig = mergeConfig(DEFAULT_CONFIG, cmsData);
+    } else {
+      console.log("⚠️ PAKAI DEFAULT");
 
-        // ✅ 3. LISTEN SERVER (TAPI TIDAK BLOKING)
-        socket.once("configSync", (config) => {
-          console.log("🔥 CONFIG DARI SERVER:", config);
+      // 🔥 3. FALLBACK
+      finalConfig = DEFAULT_CONFIG;
+    }
 
-          const current = this.registry.get("gameConfig");
+    console.log("🔥 FINAL CONFIG:", finalConfig);
 
-          this.registry.set("gameConfig", {
-            ...current,
-            config: {
-              ...current.config,
-              gameplay: {
-                ...current.config.gameplay,
-                turn_time: config.gameplay?.turn_time ?? current.config.gameplay.turn_time,
-                placement_time: config.gameplay?.placement_time ?? current.config.gameplay.placement_time,
-                ship_cooldowns: config.gameplay?.ship_cooldowns ?? current.config.gameplay.ship_cooldowns, // 🔥 INI KUNCI
-              },
-              score: {
-                ...current.config.score,
-                ...config.score,
-              },
-            },
-          });
-        });
+    // 🔥 4. SIMPAN
+    this.registry.set("gameConfig", finalConfig);
 
-        // 🔥 4. LANGSUNG MASUK GAME (INI KUNCI)
-        this.scene.start("Preloader");
-      })
-      .catch((err) => {
-        console.error("❌ GAGAL CMS:", err);
+    // 🔥 5. KIRIM KE SERVER
+    socket.emit("syncConfig", finalConfig.config);
 
-        // fallback default
-        this.registry.set("gameConfig", DEFAULT_CONFIG);
-
-        socket.emit("syncConfig", DEFAULT_CONFIG.config);
-
-        this.scene.start("Preloader");
-      });
+    // 🔥 6. LANJUT GAME
+    this.scene.start("Preloader");
   }
 }

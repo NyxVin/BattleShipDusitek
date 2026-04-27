@@ -60,11 +60,11 @@ export class Game extends Scene {
   create() {
     const cfg = this.registry.get("gameConfig");
     this.turnTime = cfg.config.gameplay.turn_time;
-const cooldowns = cfg.config?.gameplay?.ship_cooldowns;
+    const cooldowns = cfg.config?.gameplay?.ship_cooldowns;
 
-this.shipsUI.forEach((ship) => {
-  ship.cooldown = cooldowns?.[ship.key] ?? ship.cooldown;
-});
+    this.shipsUI.forEach((ship) => {
+      ship.cooldown = cooldowns?.[ship.key] ?? ship.cooldown;
+    });
     console.log("DPR:", window.devicePixelRatio);
     this.sfx = {
       misil: this.sound.add("misil"),
@@ -397,17 +397,20 @@ this.shipsUI.forEach((ship) => {
       this.turnTime = data.timeLeft;
 
       if (prevTurn !== data.currentTurn) {
-        // 🔥 TAMBAHAN: TURUNKAN COOLDOWN DI SINI
-        this.shipsUI.forEach((ship) => {
-          if (ship.cooldownActive && ship.cooldownLeft > 0) {
-            ship.cooldownLeft--;
+        // 🔥 HANYA SAAT GILIRAN KAMU
+        // 🔥 JIKA SEBELUMNYA GILIRAN KAMU
+        if (prevTurn === socket.id) {
+          this.shipsUI.forEach((ship) => {
+            if (ship.cooldownActive && ship.cooldownLeft > 0) {
+              ship.cooldownLeft--;
 
-            if (ship.cooldownLeft <= 0) {
-              ship.cooldownLeft = 0;
-              ship.cooldownActive = false;
+              if (ship.cooldownLeft <= 0) {
+                ship.cooldownLeft = 0;
+                ship.cooldownActive = false;
+              }
             }
-          }
-        });
+          });
+        }
 
         // popup tetap
         if (this.isMyTurn) {
