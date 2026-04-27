@@ -1,6 +1,7 @@
 import { Scene } from "phaser";
 import { DEFAULT_CONFIG } from "../config/defaultConfig";
 import { socket } from "../socket";
+import axios from "axios";
 export class Boot extends Scene {
   constructor() {
     super("Boot");
@@ -9,52 +10,55 @@ export class Boot extends Scene {
   preload() {}
 
   create() {
-    socket.on("configSync", (config) => {
-      const current = this.registry.get("gameConfig");
+    axios
+      .get("/config.json")
+      .then((res) => {
+        const data = res.data;
 
-      this.registry.set("gameConfig", {
-        ...current,
-        config: {
-          ...current.config,
-          gameplay: {
-            ...current.config.gameplay,
-            turn_time: config.turn_time,
-            placement_time: config.placement_time,
-          },
-          score: config.score,
-        },
-      });
-    });
+        console.log("🔥 CONFIG CMS:", data);
 
-    const slug = "battleship";
+        // ✅ 1. LANGSUNG PAKAI CMS (JANGAN NUNGGU SERVER)
+        this.registry.set("gameConfig", data);
 
-    fetch(`https://cms-api-test.test/api/events/${slug}/game-config`)
-      .then((res) => res.json())
-      .then((data) => {
-        console.log("🔥 CONFIG DARI CMS:", data);
+        // ✅ 2. KIRIM KE SERVER (BIAR SERVER IKUT)
+        socket.emit("syncConfig", data.config);
 
-        const cmsConfig = {
-          version: data.version,
-          config: data.config,
-        };
+        // ✅ 3. LISTEN SERVER (TAPI TIDAK BLOKING)
+        socket.once("configSync", (config) => {
+          console.log("🔥 CONFIG DARI SERVER:", config);
 
-        this.registry.set("gameConfig", cmsConfig);
+          const current = this.registry.get("gameConfig");
 
-        socket.emit("syncConfig", cmsConfig.config);
+          this.registry.set("gameConfig", {
+            ...current,
+            config: {
+              ...current.config,
+              gameplay: {
+                ...current.config.gameplay,
+                turn_time: config.gameplay?.turn_time ?? current.config.gameplay.turn_time,
+                placement_time: config.gameplay?.placement_time ?? current.config.gameplay.placement_time,
+                ship_cooldowns: config.gameplay?.ship_cooldowns ?? current.config.gameplay.ship_cooldowns, // 🔥 INI KUNCI
+              },
+              score: {
+                ...current.config.score,
+                ...config.score,
+              },
+            },
+          });
+        });
 
+        // 🔥 4. LANGSUNG MASUK GAME (INI KUNCI)
         this.scene.start("Preloader");
       })
       .catch((err) => {
         console.error("❌ GAGAL CMS:", err);
 
+        // fallback default
         this.registry.set("gameConfig", DEFAULT_CONFIG);
+
         socket.emit("syncConfig", DEFAULT_CONFIG.config);
 
         this.scene.start("Preloader");
       });
-
-    this.add.text(-1000, -1000, "font", {
-      fontFamily: "LilitaOne",
-    });
   }
 }

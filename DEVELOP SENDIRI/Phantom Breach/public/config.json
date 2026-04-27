@@ -1,0 +1,59 @@
+{
+  "version": "v1",
+  "config": {
+    "gameplay": {
+      "turn_time": 20,
+      "placement_time": 50
+    },
+    "assets": {
+      "background": "assets/background.png",
+      "ships": {
+        "spaceship1": "assets/spaceship1.png",
+        "spaceship2": "assets/spaceship2.png",
+        "spaceship3": "assets/spaceship3.png",
+        "spaceship4": "assets/spaceship4.png"
+      },
+      "effects": {
+        "hit": "assets/hit.png",
+        "miss": "assets/miss.png",
+        "bullet": "assets/peluru.png",
+        "target": "assets/target.png"
+      },
+      "audio": {
+        "bgm": "assets/sound/soundgame.mp3",
+        "win": "assets/sound/winner.mp3",
+        "lose": "assets/sound/lose.mp3",
+        "explosion": "assets/sound/explosion.mp3",
+        "shoot": "assets/sound/misil.mp3",
+        "miss": "assets/sound/waterboom.mp3"
+      }
+    },
+    "ui": {
+      "text": {
+        "turn": "GILIRAN KAMU",
+        "enemy": "GILIRAN LAWAN",
+        "invalid": "INVALID",
+        "cooldown": "COOLDOWN!"
+      },
+      "colors": {
+        "turn": "#D9A909",
+        "enemy": "#FF0000",
+        "invalid": "#FF0000"
+      },
+      "header": {
+        "title": "IT'S TIME TO WAR",
+        "subtitle": "Pilih target untuk diserang!"
+      }
+    },
+    "result": {
+      "win_text": "MENANG!",
+      "lose_text": "KALAH...",
+      "win_desc": "Semua unit musuh berhasil dihancurkan!",
+      "lose_desc": "Semua unitmu berhasil dihancurkan!"
+    },
+    "score": {
+      "hit": 200,
+      "win_bonus": 5
+    }
+  }
+}

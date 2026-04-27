@@ -60,9 +60,11 @@ export class Game extends Scene {
   create() {
     const cfg = this.registry.get("gameConfig");
     this.turnTime = cfg.config.gameplay.turn_time;
-    this.shipsUI.forEach((ship) => {
-      ship.cooldown = cfg.config.gameplay.ship_cooldowns[ship.key] ?? 0;
-    });
+const cooldowns = cfg.config?.gameplay?.ship_cooldowns;
+
+this.shipsUI.forEach((ship) => {
+  ship.cooldown = cooldowns?.[ship.key] ?? ship.cooldown;
+});
     console.log("DPR:", window.devicePixelRatio);
     this.sfx = {
       misil: this.sound.add("misil"),

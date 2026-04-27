@@ -2,17 +2,10 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import { generateRoomCode, rooms } from "./roomManager.js";
-let configLocked = false;
+
 const matchmakingQueue = [];
 const playersInQueue = new Set();
-let GAME_CONFIG = {
-  turn_time: 15,
-  placement_time: 30,
-  score: {
-    hit: 10,
-    win_bonus: 50,
-  },
-};
+let GAME_CONFIG = null;
 const app = express();
 const server = http.createServer(app);
 
@@ -37,7 +30,6 @@ setInterval(() => {
       console.log("🧹 ROOM KOSONG, HAPUS:", code);
       cleanRoom(code);
     }
-
   }
 }, 10000);
 
@@ -71,11 +63,15 @@ function cleanRoom(code) {
 }
 
 function startGameLoop(roomCode) {
+  if (!GAME_CONFIG) {
+    console.log("❌ CONFIG BELUM MASUK!");
+    return;
+  }
+
+  const room = rooms[roomCode];
   if (roomIntervals[roomCode]) {
     clearInterval(roomIntervals[roomCode]);
   }
-  const room = rooms[roomCode];
-
   room.timeLeft = GAME_CONFIG.turn_time;
   room.currentTurn = room.host;
 
@@ -104,6 +100,10 @@ function startGameLoop(roomCode) {
 }
 
 function startPlacementTimer(roomCode) {
+  if (!GAME_CONFIG) {
+    console.log("❌ CONFIG BELUM MASUK (placement)!");
+    return;
+  }
   const room = rooms[roomCode];
   if (!room) return;
 
@@ -210,19 +210,24 @@ io.on("connection", (socket) => {
     break;
   }
   socket.on("createRoom", () => {
+    if (!GAME_CONFIG) {
+      console.log("❌ CONFIG BELUM MASUK!");
+      socket.emit("error", "Config belum siap");
+      return;
+    }
     const code = generateRoomCode();
 
     rooms[code] = {
       code,
-      host: p1.id,
-      guest: p2.id,
+      host: socket.id,
+      guest: null,
       playersReady: 0,
       ships: {},
       hits: {},
       scores: {},
       currentTurn: null,
       hasAttacked: false,
-      timeLeft: GAME_CONFIG.turn_time,
+      timeLeft: GAME_CONFIG ? GAME_CONFIG.turn_time : 15,
       createdAt: Date.now(),
       disconnectPlayer: null,
 
@@ -285,6 +290,10 @@ io.on("connection", (socket) => {
   });
 
   function tryMatch() {
+    if (!GAME_CONFIG) {
+      console.log("❌ CONFIG BELUM MASUK (MATCH)");
+      return;
+    }
     while (matchmakingQueue.length >= 2) {
       const p1 = matchmakingQueue.shift();
       const p2 = matchmakingQueue.shift();
@@ -307,7 +316,7 @@ io.on("connection", (socket) => {
         scores: {},
         currentTurn: null,
         hasAttacked: false,
-        timeLeft: GAME_CONFIG.turn_time,
+        timeLeft: GAME_CONFIG ? GAME_CONFIG.turn_time : 15,
         createdAt: Date.now(),
         disconnectPlayer: null,
 
@@ -320,7 +329,6 @@ io.on("connection", (socket) => {
       io.to(code).emit("matchFound", code);
 
       setTimeout(() => {
-
         io.to(code).emit("goToPlacement", {
           roomCode: code,
           timeLeft: GAME_CONFIG.placement_time,
@@ -614,7 +622,6 @@ io.on("connection", (socket) => {
 
           const winnerScore = buildScore(room, winner, true);
           const loserScore = buildScore(room, socket.id, false);
-          winnerScore.score = GAME_CONFIG.score.win_bonus;
           io.to(code).emit("gameOver", {
             winner,
             scores: {
@@ -633,25 +640,36 @@ io.on("connection", (socket) => {
     }
   });
 
-socket.on("syncConfig", (config) => {
-  if (configLocked) return;
+  socket.on("syncConfig", (config) => {
+    console.log("🔥 CONFIG MASUK DARI CLIENT:", config);
 
-  console.log("🔥 CONFIG MASUK:", config);
+    if (!config) return;
 
-  if (config?.gameplay) {
-    GAME_CONFIG.turn_time = config.gameplay.turn_time;
-    GAME_CONFIG.placement_time = config.gameplay.placement_time;
-  }
+    if (!config.score) {
+      console.error("❌ SCORE TIDAK ADA DI CONFIG!");
+    }
 
-   if (config?.score) {
-    GAME_CONFIG.score = config.score;
-  }
+    GAME_CONFIG = {
+      turn_time: config.gameplay?.turn_time ?? 15,
+      placement_time: config.gameplay?.placement_time ?? 30,
+      ship_cooldowns: config.gameplay?.ship_cooldowns ?? {},
+      score: {
+        hit: config.score?.hit ?? 10,
+        win_bonus: config.score?.win_bonus ?? 50,
+      },
+    };
 
-  configLocked = true;
+    console.log("✅ GAME_CONFIG FINAL:", GAME_CONFIG);
 
-  // 🔥 KIRIM KE SEMUA PLAYER
-  io.emit("configSync", GAME_CONFIG);
-});
+    io.emit("configSync", {
+      gameplay: {
+        turn_time: GAME_CONFIG.turn_time,
+        placement_time: GAME_CONFIG.placement_time,
+        ship_cooldowns: GAME_CONFIG.ship_cooldowns,
+      },
+      score: GAME_CONFIG.score,
+    });
+  });
 });
 server.listen(3000, () => {
   console.log("🚀 SERVER RUNNING ON 3000");
