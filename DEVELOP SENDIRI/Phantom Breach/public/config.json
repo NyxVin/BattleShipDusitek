@@ -3,7 +3,7 @@
   "config": {
     "gameplay": {
       "turn_time": 20,
-      "placement_time": 50
+      "placement_time": 100
     },
     "assets": {
       "background": "assets/background.png",
@@ -52,8 +52,8 @@
       "lose_desc": "Semua unitmu berhasil dihancurkan!"
     },
     "score": {
-      "hit": 200,
-      "win_bonus": 5
+      "hit": 1,
+      "win_bonus": 500
     }
   }
 }

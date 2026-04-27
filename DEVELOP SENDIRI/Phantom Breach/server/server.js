@@ -173,10 +173,10 @@ function buildScore(room, playerId, isWinner = false) {
   const total = s.hitCount + s.missCount;
   const accuracy = total > 0 ? Math.round((s.hitCount / total) * 100) : 0;
 
-  let score = s.hitCount * GAME_CONFIG.score.hit;
+  let score = s.hitCount * GAME_CONFIG.gameplay.score.hit;
 
   if (isWinner) {
-    score += GAME_CONFIG.score.win_bonus;
+    score += GAME_CONFIG.gameplay.score.win_bonus;
   }
 
   return {

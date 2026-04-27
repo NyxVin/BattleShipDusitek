@@ -12,6 +12,11 @@ export const DEFAULT_CONFIG = {
         spaceship3: 0,
         spaceship4: 2,
       },
+
+      score: {
+        hit: 100,
+        win_bonus: 300,
+      },
     },
 
     assets: {
@@ -59,18 +64,13 @@ export const DEFAULT_CONFIG = {
         title: "IT'S TIME TO WAR",
         subtitle: "Pilih target untuk diserang!",
       },
-    },
 
-    result: {
-      win_text: "MENANG!",
-      lose_text: "KALAH...",
-      win_desc: "Semua unit musuh berhasil dihancurkan!",
-      lose_desc: "Semua unitmu berhasil dihancurkan!",
-    },
-
-    score: {
-      hit: 100,
-      win_bonus: 300,
+      result: {
+        win_text: "MENANG!",
+        lose_text: "KALAH...",
+        win_desc: "Semua unit musuh berhasil dihancurkan!",
+        lose_desc: "Semua unitmu berhasil dihancurkan!",
+      },
     },
   },
 };
