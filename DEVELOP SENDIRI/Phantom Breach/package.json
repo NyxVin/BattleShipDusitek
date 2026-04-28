@@ -24,8 +24,10 @@
         "vite": "^6.3.1"
     },
     "dependencies": {
+        "@socket.io/redis-adapter": "^8.3.0",
         "axios": "^1.15.2",
         "phaser": "^3.90.0",
+        "redis": "^5.12.1",
         "socket.io-client": "^4.8.3",
         "terser": "^5.39.0"
     }

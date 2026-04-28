@@ -477,6 +477,9 @@ export class Game extends Scene {
               isAnyHit = true;
 
               this.cameras.main.shake(400, 0.05);
+              if (navigator.vibrate) {
+                navigator.vibrate(400);
+              }
               const hitMark = this.add
                 .sprite(px, py, "hit")
                 .setDisplaySize(this.cellSize * 0.8, this.cellSize * 0.8)
