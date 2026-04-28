@@ -2,8 +2,8 @@
   "version": "v1",
   "config": {
     "gameplay": {
-      "turn_time": 20,
-      "placement_time": 100
+      "turn_time": 15,
+      "placement_time": 30
     },
     "assets": {
       "background": "assets/background.png",
