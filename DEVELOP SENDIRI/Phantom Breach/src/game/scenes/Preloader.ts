@@ -85,12 +85,12 @@ export class Preloader extends Scene {
     this.load.image("grid_range4", "assets/grid_range4.png");
     this.load.image("target", cfg.config.assets.effects.target || "assets/target.png");
 
-this.load.audio("winner", cfg.config.assets.audio.winner || "assets/sound/winner.mp3");
-this.load.audio("lose", cfg.config.assets.audio.lose || "assets/sound/lose.mp3");
-this.load.audio("soundgame", cfg.config.assets.audio.bgm || "assets/sound/soundgame.mp3");
-this.load.audio("explosion", cfg.config.assets.audio.explosion || "assets/sound/explosion.mp3");
-this.load.audio("misil", cfg.config.assets.audio.shoot || "assets/sound/misil.mp3");
-this.load.audio("waterboom", cfg.config.assets.audio.miss || "assets/sound/waterboom.mp3");
+    this.load.audio("winner", cfg.config.assets.audio.winner || "assets/sound/winner.mp3");
+    this.load.audio("lose", cfg.config.assets.audio.lose || "assets/sound/lose.mp3");
+    this.load.audio("soundgame", cfg.config.assets.audio.bgm || "assets/sound/soundgame.mp3");
+    this.load.audio("explosion", cfg.config.assets.audio.explosion || "assets/sound/explosion.mp3");
+    this.load.audio("misil", cfg.config.assets.audio.shoot || "assets/sound/misil.mp3");
+    this.load.audio("waterboom", cfg.config.assets.audio.miss || "assets/sound/waterboom.mp3");
   }
 
   create() {

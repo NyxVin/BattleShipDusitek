@@ -79,7 +79,7 @@ export class MainMenu extends Scene {
       .setOrigin(0.5);
     const friendSub = this.add
       .text(centerX, 360, "Buat room baru atau masuk ke room temanmu", {
-        fontFamily: "poppins",
+        fontFamily: "Poppins",
         fontSize: "10px",
         letterSpacing: 1.5,
         color: "#ffffff88",
@@ -155,7 +155,7 @@ export class MainMenu extends Scene {
 
       const info = this.add
         .text(centerX, 340, "Radar sedang memindai pemain di sekitarmu", {
-          fontFamily: "poppins",
+          fontFamily: "Poppins",
           fontSize: "10px",
           color: "#ffffff88",
           letterSpacing: 1.5,
@@ -312,7 +312,7 @@ export class MainMenu extends Scene {
       .setOrigin(0.5);
     const roomLabel = this.add
       .text(centerX, 180, "Kode Room Anda", {
-        fontFamily: "poppins",
+        fontFamily: "Poppins",
         fontSize: "16px",
         letterSpacing: 3,
         color: "#B0B8C1",
@@ -343,7 +343,7 @@ export class MainMenu extends Scene {
 
     const shareText = this.add
       .text(55, 470, "Bagikan kode ke temanmu", {
-        fontFamily: "poppins",
+        fontFamily: "Poppins",
         fontSize: "8px",
         color: "#B0B8C1",
         letterSpacing: 2,
@@ -475,7 +475,7 @@ export class MainMenu extends Scene {
     const card = this.add.image(centerX, centerY, "card_join_room").setScale(1.02);
     const joinLabel = this.add
       .text(centerX, centerY - 45, "🎯 Masukkan Kode Room", {
-        fontFamily: "poppins",
+        fontFamily: "Poppins",
         fontSize: "16px",
         color: "#9AA4B2",
       })
@@ -643,10 +643,17 @@ export class MainMenu extends Scene {
       });
     });
 
-    friendButton.on("pointerdown", () => {
-      this.mainMenuContainer.setVisible(false);
-      this.friendMenuContainer.setVisible(true);
-    });
+friendButton.on("pointerdown", () => {
+  this.mainMenuContainer.setVisible(false);
+  this.friendMenuContainer.setVisible(true);
+
+  // 💣 FORCE REFRESH FONT
+  this.friendMenuContainer.iterate((obj: any) => {
+    if (obj.setFontFamily && obj.style?.fontFamily) {
+      obj.setFontFamily(obj.style.fontFamily);
+    }
+  });
+});
 
     backButton.on("pointerdown", () => {
       this.friendMenuContainer.setVisible(false);

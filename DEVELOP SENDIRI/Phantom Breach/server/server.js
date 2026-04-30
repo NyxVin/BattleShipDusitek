@@ -2,6 +2,8 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import { generateRoomCode, rooms } from "./roomManager.js";
+import { createClient } from "redis";
+import { createAdapter } from "@socket.io/redis-adapter";
 
 const matchmakingQueue = [];
 const playersInQueue = new Set();
@@ -13,28 +15,46 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
+const pubClient = createClient({
+  url: "redis://127.0.0.1:6379",
+});
+
+const subClient = pubClient.duplicate();
+
+async function saveRoom(code, room) {
+  await pubClient.set(`room:${code}`, JSON.stringify(room));
+}
+
+async function getRoom(code) {
+  const data = await pubClient.get(`room:${code}`);
+  return data ? JSON.parse(data) : null;
+}
+
+async function deleteRoomRedis(code) {
+  await pubClient.del(`room:${code}`);
+}
+
 const roomIntervals = {};
 const disconnectTimers = {};
 const ROOM_IDLE_EXPIRE = 20000;
 
-setInterval(() => {
-  const now = Date.now();
-
+setInterval(async () => {
   for (const code in rooms) {
-    const room = rooms[code];
+    let room = await getRoom(code);
     if (!room || !room.createdAt) continue;
 
     const roomSize = io.sockets.adapter.rooms.get(code)?.size || 0;
+    const now = Date.now();
 
-    if (roomSize === 0) {
-      console.log("🧹 ROOM KOSONG, HAPUS:", code);
-      cleanRoom(code);
+    if (roomSize === 0 && now - room.createdAt > 10000 && room.phase !== "waiting") {
+      console.log("🧹 ROOM DIHAPUS:", code);
+      await cleanRoom(code);
     }
   }
 }, 10000);
 
-function cleanRoom(code) {
-  const room = rooms[code];
+async function cleanRoom(code) {
+  let room = await getRoom(code);
   if (!room) return;
 
   console.log("🧹 CLEAN ROOM:", code);
@@ -44,53 +64,34 @@ function cleanRoom(code) {
     delete roomIntervals[code];
   }
 
-  if (room.placementInterval) {
-    clearInterval(room.placementInterval);
-    room.placementInterval = null;
-  }
-
-  if (room.host && disconnectTimers[room.host]) {
-    clearTimeout(disconnectTimers[room.host]);
-    delete disconnectTimers[room.host];
-  }
-
-  if (room.guest && disconnectTimers[room.guest]) {
-    clearTimeout(disconnectTimers[room.guest]);
-    delete disconnectTimers[room.guest];
-  }
+  await deleteRoomRedis(code); // 🔥 WAJIB
 
   delete rooms[code];
 }
 
-function startGameLoop(roomCode) {
-  if (!GAME_CONFIG) {
-    console.log("❌ CONFIG BELUM MASUK!");
-    return;
-  }
+async function startGameLoop(roomCode) {
+  if (!GAME_CONFIG) return;
 
-  const room = rooms[roomCode];
   if (roomIntervals[roomCode]) {
     clearInterval(roomIntervals[roomCode]);
   }
-  room.timeLeft = GAME_CONFIG.turn_time;
-  room.currentTurn = room.host;
 
-  io.to(roomCode).emit("game_tick", {
-    timeLeft: room.timeLeft,
-    currentTurn: room.currentTurn,
-  });
+  roomIntervals[roomCode] = setInterval(async () => {
+    let room = await getRoom(roomCode);
+    if (!room) return;
 
-  roomIntervals[roomCode] = setInterval(() => {
     room.timeLeft--;
 
     if (room.timeLeft <= 0) {
       room.timeLeft = GAME_CONFIG.turn_time;
 
       const nextTurn = room.currentTurn === room.host ? room.guest : room.host;
-      room.currentTurn = nextTurn;
 
+      room.currentTurn = nextTurn;
       room.hasAttacked = false;
     }
+
+    await saveRoom(roomCode, room);
 
     io.to(roomCode).emit("game_tick", {
       timeLeft: room.timeLeft,
@@ -99,22 +100,24 @@ function startGameLoop(roomCode) {
   }, 1000);
 }
 
-function startPlacementTimer(roomCode) {
+async function startPlacementTimer(roomCode) {
   if (!GAME_CONFIG) {
     console.log("❌ CONFIG BELUM MASUK (placement)!");
     return;
   }
-  const room = rooms[roomCode];
+  let room = await getRoom(roomCode);
   if (!room) return;
 
   const duration = GAME_CONFIG.placement_time;
 
   room.placementTimeLeft = duration;
+  await saveRoom(roomCode, room); // 🔥 TAMBAHAN WAJIB
 
-  room.placementInterval = setInterval(() => {
-    const currentRoom = rooms[roomCode];
+  roomIntervals[roomCode] = setInterval(async () => {
+    let currentRoom = await getRoom(roomCode);
     if (!currentRoom) {
-      clearInterval(room.placementInterval);
+      clearInterval(roomIntervals[roomCode]);
+      delete roomIntervals[roomCode];
       return;
     }
 
@@ -125,8 +128,8 @@ function startPlacementTimer(roomCode) {
     });
 
     if (currentRoom.placementTimeLeft <= 0) {
-      clearInterval(currentRoom.placementInterval);
-      currentRoom.placementInterval = null;
+      clearInterval(roomIntervals[roomCode]);
+      delete roomIntervals[roomCode];
 
       console.log("⏰ TIMER HABIS");
 
@@ -136,7 +139,10 @@ function startPlacementTimer(roomCode) {
         roomCode,
         ships: currentRoom.ships,
       });
+      currentRoom.currentTurn = currentRoom.host;
+      currentRoom.timeLeft = GAME_CONFIG.turn_time;
 
+      await saveRoom(roomCode, currentRoom);
       startGameLoop(roomCode);
     }
   }, 1000);
@@ -153,7 +159,7 @@ function isAllShipsDestroyed(ships, hits) {
 
         const key = `${sx},${sy}`;
 
-        if (!hits.has(key)) {
+        if (!hits.includes(key)) {
           return false;
         }
       }
@@ -188,10 +194,10 @@ function buildScore(room, playerId, isWinner = false) {
   };
 }
 
-io.on("connection", (socket) => {
+io.on("connection", async (socket) => {
   console.log("USER CONNECT:", socket.id);
   for (const code in rooms) {
-    const room = rooms[code];
+    let room = await getRoom(code);
     if (!room.disconnectPlayer) continue;
     if (room.disconnectPlayer.oldId !== socket.id) continue;
 
@@ -209,7 +215,13 @@ io.on("connection", (socket) => {
 
     break;
   }
-  socket.on("createRoom", () => {
+  socket.on("createRoom", async () => {
+    const roomCount = Object.keys(rooms).length;
+
+    if (roomCount > 200) {
+      socket.emit("error", "Server penuh");
+      return;
+    }
     if (!GAME_CONFIG) {
       console.log("❌ CONFIG BELUM MASUK!");
       socket.emit("error", "Config belum siap");
@@ -217,7 +229,7 @@ io.on("connection", (socket) => {
     }
     const code = generateRoomCode();
 
-    rooms[code] = {
+    const newRoom = {
       code,
       host: socket.id,
       guest: null,
@@ -230,18 +242,17 @@ io.on("connection", (socket) => {
       timeLeft: GAME_CONFIG ? GAME_CONFIG.turn_time : 15,
       createdAt: Date.now(),
       disconnectPlayer: null,
-
-      phase: "waiting", // 🔥 TAMBAHAN
+      phase: "waiting",
     };
 
+    rooms[code] = newRoom;
     socket.join(code);
+    await saveRoom(code, newRoom);
     socket.emit("roomCreated", code);
-
-    console.log("ROOM CREATED:", code);
   });
 
-  socket.on("joinRoom", (code) => {
-    const room = rooms[code];
+  socket.on("joinRoom", async (code) => {
+    let room = await getRoom(code);
 
     if (!room) {
       socket.emit("roomNotFound");
@@ -254,6 +265,8 @@ io.on("connection", (socket) => {
     }
 
     room.guest = socket.id;
+    await saveRoom(code, room);
+    rooms[code] = room; // biar logic lama tetap jalan
     socket.join(code);
 
     socket.emit("roomJoined", code);
@@ -289,7 +302,7 @@ io.on("connection", (socket) => {
     tryMatch();
   });
 
-  function tryMatch() {
+  async function tryMatch() {
     if (!GAME_CONFIG) {
       console.log("❌ CONFIG BELUM MASUK (MATCH)");
       return;
@@ -323,6 +336,8 @@ io.on("connection", (socket) => {
         phase: "waiting", // 🔥 TAMBAHAN
       };
 
+      await saveRoom(code, rooms[code]);
+
       p1.join(code);
       p2.join(code);
 
@@ -354,25 +369,32 @@ io.on("connection", (socket) => {
 
     console.log("❌ CANCEL MATCH:", socket.id);
   });
-  socket.on("playerReady", ({ roomCode, ships }) => {
-    const room = rooms[roomCode];
+  socket.on("playerReady", async ({ roomCode, ships }) => {
+    let room = await getRoom(roomCode);
     if (!room) return;
 
-    room.ships[socket.id] = ships;
-    if (!room.readyPlayers) room.readyPlayers = new Set();
+    if (!Array.isArray(ships)) return;
 
-    if (!room.readyPlayers.has(socket.id)) {
-      room.readyPlayers.add(socket.id);
+    for (const ship of ships) {
+      if (typeof ship.x !== "number" || typeof ship.y !== "number" || ship.x < 0 || ship.y < 0 || ship.x >= 8 || ship.y >= 6) {
+        return;
+      }
+    }
+
+    room.ships[socket.id] = ships;
+    if (!room.readyPlayers) room.readyPlayers = [];
+
+    if (!room.readyPlayers.includes(socket.id)) {
+      room.readyPlayers.push(socket.id);
       room.playersReady++;
     }
 
     console.log("READY:", room.playersReady);
 
     if (room.playersReady === 2) {
-      // 🔥 1. MATIKAN TIMER PLACEMENT
-      if (room.placementInterval) {
-        clearInterval(room.placementInterval);
-        room.placementInterval = null;
+      if (roomIntervals[roomCode]) {
+        clearInterval(roomIntervals[roomCode]);
+        delete roomIntervals[roomCode];
       }
 
       // 🔥 2. SET PHASE
@@ -386,15 +408,17 @@ io.on("connection", (socket) => {
 
       startGameLoop(roomCode);
     }
+    await saveRoom(roomCode, room);
   });
 
-  socket.on("attack", ({ roomCode, x, y, width, height }) => {
-    const room = rooms[roomCode];
+  socket.on("attack", async ({ roomCode, x, y, width, height }) => {
+    let room = await getRoom(roomCode);
     if (!room) return;
 
     if (room.lock) return;
     room.lock = true;
 
+    await saveRoom(roomCode, room);
     try {
       const player = socket.id;
       if (room.currentTurn !== player) {
@@ -403,6 +427,7 @@ io.on("connection", (socket) => {
       }
 
       if (room.hasAttacked) {
+        room.hasAttacked = false;
         return;
       }
 
@@ -448,16 +473,17 @@ io.on("connection", (socket) => {
         return;
       }
       if (!room.hits) room.hits = {};
-      if (!room.hits[enemy]) room.hits[enemy] = new Set();
+      if (!room.hits[enemy]) room.hits[enemy] = [];
 
       if (!room.attackedCells) room.attackedCells = {};
-      if (!room.attackedCells[enemy]) room.attackedCells[enemy] = new Set();
+      if (!room.attackedCells[enemy]) room.attackedCells[enemy] = [];
       let allBlocked = true;
 
       for (let dx = 0; dx < width; dx++) {
         for (let dy = 0; dy < height; dy++) {
           const key = `${x + dx},${y + dy}`;
-          if (!room.attackedCells[enemy].has(key)) {
+
+          if (!room.attackedCells[enemy].includes(key)) {
             allBlocked = false;
           }
         }
@@ -482,13 +508,15 @@ io.on("connection", (socket) => {
           const ty = y + dy;
 
           const key = `${tx},${ty}`;
-          if (room.attackedCells[enemy].has(key)) {
+          if (room.attackedCells[enemy].includes(key)) {
             room.scores[player].missCount++;
             room.scores[player].totalAttack++;
             continue;
           }
 
-          room.attackedCells[enemy].add(key);
+          if (!room.attackedCells[enemy].includes(key)) {
+            room.attackedCells[enemy].push(key);
+          }
 
           let hit = false;
 
@@ -511,7 +539,9 @@ io.on("connection", (socket) => {
           }
 
           if (hit) {
-            room.hits[enemy].add(key);
+            if (!room.hits[enemy].includes(key)) {
+              room.hits[enemy].push(key);
+            }
             room.scores[player].hitCount++;
           } else {
             room.scores[player].missCount++;
@@ -535,7 +565,7 @@ io.on("connection", (socket) => {
       }
 
       const totalCells = countShipCells(enemyShips);
-      const hitCount = room.hits[enemy].size;
+      const hitCount = room.hits[enemy].length;
 
       const enemyDestroyed = hitCount >= totalCells;
       socket.emit("attackResult", {
@@ -555,45 +585,63 @@ io.on("connection", (socket) => {
           delete roomIntervals[roomCode];
         }
 
-        setTimeout(() => {
+        setTimeout(async () => {
+          let latestRoom = await getRoom(roomCode);
+          if (!latestRoom) return;
+
           io.to(roomCode).emit("gameOver", {
             winner: player,
             scores: {
-              [room.host]: buildScore(room, room.host, room.host === player),
-              [room.guest]: buildScore(room, room.guest, room.guest === player),
+              [latestRoom.host]: buildScore(latestRoom, latestRoom.host, latestRoom.host === player),
+              [latestRoom.guest]: buildScore(latestRoom, latestRoom.guest, latestRoom.guest === player),
             },
           });
 
-          if (roomIntervals[roomCode]) {
-            clearInterval(roomIntervals[roomCode]);
-            delete roomIntervals[roomCode];
-          }
-
-          cleanRoom(roomCode);
+          await cleanRoom(roomCode);
         }, 2000);
 
         return;
       }
+
       const nextTurn = player === room.host ? room.guest : room.host;
 
-      setTimeout(() => {
-        room.hasAttacked = false;
-        room.currentTurn = nextTurn;
-        room.timeLeft = GAME_CONFIG.turn_time;
+      setTimeout(async () => {
+        let latestRoom = await getRoom(roomCode);
+        if (!latestRoom) return;
+
+        latestRoom.hasAttacked = false;
+        latestRoom.currentTurn = nextTurn;
+        latestRoom.timeLeft = GAME_CONFIG.turn_time;
+
+        await saveRoom(roomCode, latestRoom);
 
         io.to(roomCode).emit("game_tick", {
-          timeLeft: room.timeLeft,
-          currentTurn: room.currentTurn,
+          timeLeft: latestRoom.timeLeft,
+          currentTurn: latestRoom.currentTurn,
         });
       }, 2000);
     } catch (err) {
       console.error("🔥 ERROR ATTACK:", err);
     } finally {
-      room.lock = false;
+      try {
+        let latestRoom = await getRoom(roomCode);
+
+        if (latestRoom) {
+          latestRoom.lock = false;
+          await saveRoom(roomCode, latestRoom);
+          rooms[roomCode] = latestRoom;
+        } else {
+          // 🔥 fallback: unlock pakai data lama
+          room.lock = false;
+          await saveRoom(roomCode, room);
+        }
+      } catch (e) {
+        console.error("❌ ERROR SAVE FINAL:", e);
+      }
     }
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     console.log("❌ DISCONNECT:", socket.id);
     playersInQueue.delete(socket.id);
 
@@ -602,7 +650,7 @@ io.on("connection", (socket) => {
       matchmakingQueue.splice(index, 1);
     }
     for (const code in rooms) {
-      const room = rooms[code];
+      let room = await getRoom(code);
 
       if (room.host === socket.id || room.guest === socket.id) {
         console.log("⏳ WAIT 10 DETIK...");
@@ -671,6 +719,21 @@ io.on("connection", (socket) => {
     });
   });
 });
-server.listen(3000, () => {
-  console.log("🚀 SERVER RUNNING ON 3000");
-});
+async function startServer() {
+  try {
+    await pubClient.connect();
+    await subClient.connect();
+
+    console.log("✅ Redis connected");
+
+    io.adapter(createAdapter(pubClient, subClient));
+
+    server.listen(3000, () => {
+      console.log("🚀 SERVER RUNNING ON 3000");
+    });
+  } catch (err) {
+    console.error("❌ Redis error:", err);
+  }
+}
+
+startServer();
