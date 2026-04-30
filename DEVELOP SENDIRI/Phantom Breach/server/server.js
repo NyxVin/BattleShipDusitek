@@ -397,13 +397,24 @@ io.on("connection", async (socket) => {
         delete roomIntervals[roomCode];
       }
 
-      // 🔥 2. SET PHASE
       room.phase = "battle";
 
-      // 🔥 3. START GAME
+      // 🔥 TAMBAHAN 1 (WAJIB)
+      room.currentTurn = room.host;
+      room.timeLeft = GAME_CONFIG.turn_time;
+      room.hasAttacked = false;
+
+      await saveRoom(roomCode, room); // 🔥 WAJIB DISIMPAN
+
       io.to(roomCode).emit("startGame", {
         roomCode,
         ships: room.ships,
+      });
+
+      // 🔥 TAMBAHAN 2 (INI YANG NGILANG DI KODE KAMU)
+      io.to(roomCode).emit("game_tick", {
+        timeLeft: room.timeLeft,
+        currentTurn: room.currentTurn,
       });
 
       startGameLoop(roomCode);
