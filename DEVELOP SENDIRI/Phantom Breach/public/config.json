@@ -3,7 +3,13 @@
   "config": {
     "gameplay": {
       "turn_time": 15,
-      "placement_time": 30
+      "placement_time": 60,
+      "ship_cooldowns": {
+        "spaceship1": 0,
+        "spaceship2": 3,
+        "spaceship3": 0,
+        "spaceship4": 2
+      }
     },
     "assets": {
       "background": "assets/background.png",

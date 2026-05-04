@@ -552,6 +552,9 @@ io.on("connection", async (socket) => {
           if (hit) {
             if (!room.hits[enemy].includes(key)) {
               room.hits[enemy].push(key);
+
+              // 🔥 SIMPAN KE REDIS
+              await saveRoom(roomCode, room);
             }
             room.scores[player].hitCount++;
           } else {
@@ -575,19 +578,10 @@ io.on("connection", async (socket) => {
         return total;
       }
 
-      const totalCells = countShipCells(enemyShips);
-      const hitCount = room.hits[enemy].length;
+      const enemyDestroyed = isAllShipsDestroyed(enemyShips, room.hits[enemy]);
 
-      const enemyDestroyed = hitCount >= totalCells;
-      socket.emit("attackResult", {
+      io.to(roomCode).emit("attackResult", {
         cells: results,
-        target: "enemy",
-        attackerId: player,
-      });
-
-      io.to(enemy).emit("attackResult", {
-        cells: results,
-        target: "self",
         attackerId: player,
       });
       if (enemyDestroyed) {
@@ -650,6 +644,7 @@ io.on("connection", async (socket) => {
         console.error("❌ ERROR SAVE FINAL:", e);
       }
     }
+
   });
 
   socket.on("disconnect", async () => {

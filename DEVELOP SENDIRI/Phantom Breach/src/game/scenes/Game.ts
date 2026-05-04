@@ -444,7 +444,25 @@ export class Game extends Scene {
       let pending = cells.length;
       let isAnyHit = false;
       cells.forEach(({ x, y, hit }: any) => {
-        const isEnemy = target === "enemy";
+        const isEnemy = attackerId === socket.id;
+// 🔥 FIX: UPDATE STATE GRID TANPA TINT
+if (hit) {
+  if (isEnemy) {
+    this.markHit(x, y); // enemy tetap pakai fungsi ini
+  } else {
+    const cell = this.selfGrid[y][x];
+    cell.hit = true;
+    cell.attacked = true;
+  }
+} else {
+  if (isEnemy) {
+    this.markMiss(x, y);
+  } else {
+    const cell = this.selfGrid[y][x];
+    cell.hit = false;
+    cell.attacked = true;
+  }
+}
 
         const startY = isEnemy ? this.enemyStartY : this.enemyStartY + this.cellSize * this.ROWS + 20;
 
@@ -760,7 +778,6 @@ export class Game extends Scene {
 
   markHit(x: number, y: number) {
     const cell = this.enemyGrid[y][x];
-    cell.rect.setTint(0xff0000);
 
     cell.hit = true;
     cell.attacked = true; // 🔥 WAJIB
@@ -768,7 +785,6 @@ export class Game extends Scene {
 
   markMiss(x: number, y: number) {
     const cell = this.enemyGrid[y][x];
-    cell.rect.setTint(0xffffff);
 
     cell.hit = false;
     cell.attacked = true; // 🔥 WAJIB
