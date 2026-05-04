@@ -17,6 +17,12 @@ export class MainMenu extends Scene {
   }
 
   create() {
+    if (!document.fonts.check("12px 'Lilita One'")) {
+      document.fonts.ready.then(() => {
+        this.scene.restart();
+      });
+      return;
+    }
     this.add.image(0, 0, "background").setOrigin(0, 0);
     this.bgm = this.sound.add("soundgame", {
       loop: true,
@@ -24,7 +30,6 @@ export class MainMenu extends Scene {
     });
 
     this.bgm.play();
-
 
     socket.off("startGame");
 
@@ -423,6 +428,15 @@ export class MainMenu extends Scene {
       roomCodeText.setText(code);
       this.friendMenuContainer.setVisible(false);
       this.createRoomContainer.setVisible(true);
+
+      // 🔥 FIX FONT (WAJIB)
+      this.createRoomContainer.iterate((obj: any) => {
+        if (obj instanceof Phaser.GameObjects.Text) {
+          const t = obj.text;
+          obj.setText("");
+          obj.setText(t);
+        }
+      });
     });
 
     socket.on("roomJoined", (code: string) => {
@@ -643,17 +657,19 @@ export class MainMenu extends Scene {
       });
     });
 
-friendButton.on("pointerdown", () => {
-  this.mainMenuContainer.setVisible(false);
-  this.friendMenuContainer.setVisible(true);
+    friendButton.on("pointerdown", () => {
+      this.mainMenuContainer.setVisible(false);
+      this.friendMenuContainer.setVisible(true);
 
-  // 💣 FORCE REFRESH FONT
-  this.friendMenuContainer.iterate((obj: any) => {
-    if (obj.setFontFamily && obj.style?.fontFamily) {
-      obj.setFontFamily(obj.style.fontFamily);
-    }
-  });
-});
+      // 🔥 FIX FINAL: FORCE RE-RENDER TEXT
+      this.friendMenuContainer.iterate((obj: any) => {
+        if (obj instanceof Phaser.GameObjects.Text) {
+          const currentText = obj.text;
+          obj.setText(""); // kosongkan dulu
+          obj.setText(currentText); // render ulang
+        }
+      });
+    });
 
     backButton.on("pointerdown", () => {
       this.friendMenuContainer.setVisible(false);
@@ -669,6 +685,15 @@ friendButton.on("pointerdown", () => {
     joinRoomButton.on("pointerdown", () => {
       this.friendMenuContainer.setVisible(false);
       this.joinRoomContainer.setVisible(true);
+
+      // 🔥 FIX FONT (WAJIB)
+      this.joinRoomContainer.iterate((obj: any) => {
+        if (obj instanceof Phaser.GameObjects.Text) {
+          const t = obj.text;
+          obj.setText("");
+          obj.setText(t);
+        }
+      });
     });
 
     joinBackButton.on("pointerdown", () => {
