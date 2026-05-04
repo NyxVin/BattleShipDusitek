@@ -22,12 +22,19 @@ export const DEFAULT_CONFIG = {
     assets: {
       background: "assets/background.png",
 
-      ships: {
-        spaceship1: "assets/spaceship1.png",
-        spaceship2: "assets/spaceship2.png",
-        spaceship3: "assets/spaceship3.png",
-        spaceship4: "assets/spaceship4.png",
-      },
+"ships": {
+  "spaceship1": "assets/kapal1.png",
+  "spaceship1_hit": "assets/kapal1.1.png",
+
+  "spaceship2": "assets/kapal2.png",
+  "spaceship2_hit": "assets/kapal2.2.png",
+
+  "spaceship3": "assets/kapal3.png",
+  "spaceship3_hit": "assets/kapal3.3.png",
+
+  "spaceship4": "assets/kapal4.png",
+  "spaceship4_hit": "assets/kapal4.4.png"
+},
 
       effects: {
         hit: "assets/hit.png",

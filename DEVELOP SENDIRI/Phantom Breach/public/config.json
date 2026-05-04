@@ -3,7 +3,7 @@
   "config": {
     "gameplay": {
       "turn_time": 15,
-      "placement_time": 60,
+      "placement_time": 30,
       "ship_cooldowns": {
         "spaceship1": 0,
         "spaceship2": 3,
@@ -14,10 +14,10 @@
     "assets": {
       "background": "assets/background.png",
       "ships": {
-        "spaceship1": "assets/spaceship1.png",
-        "spaceship2": "assets/spaceship2.png",
-        "spaceship3": "assets/spaceship3.png",
-        "spaceship4": "assets/spaceship4.png"
+        "spaceship1": "assets/kapal1.png",
+        "spaceship2": "assets/kapal2.png",
+        "spaceship3": "assets/kapal3.png",
+        "spaceship4": "assets/kapal4.png"
       },
       "effects": {
         "hit": "assets/hit.png",

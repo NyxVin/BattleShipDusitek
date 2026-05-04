@@ -99,7 +99,7 @@ export class Placement extends Scene {
       if (!data || data.timeLeft == null) return;
 
       headerTimerText.setText(data.timeLeft + "s");
-      if (data.timeLeft === 1 && !isReady) {
+      if (data.timeLeft === 0 && !isReady) {
         console.log("🔥 AUTO KIRIM SHIPS (TIMER HABIS)");
 
         socket.emit("playerReady", {

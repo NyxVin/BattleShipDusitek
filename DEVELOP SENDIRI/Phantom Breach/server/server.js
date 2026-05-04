@@ -120,12 +120,15 @@ async function startPlacementTimer(roomCode) {
       delete roomIntervals[roomCode];
       return;
     }
+currentRoom.placementTimeLeft--;
 
-    currentRoom.placementTimeLeft--;
+// 🔥 SIMPAN DULU (INI YANG KAMU BELUM ADA)
+await saveRoom(roomCode, currentRoom);
 
-    io.to(roomCode).emit("placementTick", {
-      timeLeft: currentRoom.placementTimeLeft,
-    });
+// 🔥 BARU EMIT
+io.to(roomCode).emit("placementTick", {
+  timeLeft: currentRoom.placementTimeLeft,
+});
 
     if (currentRoom.placementTimeLeft <= 0) {
       clearInterval(roomIntervals[roomCode]);

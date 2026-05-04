@@ -62,6 +62,10 @@ export class Preloader extends Scene {
     this.load.image("spaceship2", cfg.config.assets.ships.spaceship2 || "assets/spaceship2.png");
     this.load.image("spaceship3", cfg.config.assets.ships.spaceship3 || "assets/spaceship3.png");
     this.load.image("spaceship4", cfg.config.assets.ships.spaceship4 || "assets/spaceship4.png");
+this.load.image("spaceship1_hit", cfg.config.assets.ships.spaceship1_hit || "assets/kapal1.1.png");
+this.load.image("spaceship2_hit", cfg.config.assets.ships.spaceship2_hit || "assets/kapal2.2.png");
+this.load.image("spaceship3_hit", cfg.config.assets.ships.spaceship3_hit || "assets/kapal3.3.png");
+this.load.image("spaceship4_hit", cfg.config.assets.ships.spaceship4_hit || "assets/kapal4.4.png");
 
     this.load.image("panel_top", "/assets/panel_top.png");
     this.load.image("bg_timer", "/assets/bg_timer.png");
