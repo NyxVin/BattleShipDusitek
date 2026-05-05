@@ -122,6 +122,7 @@ async function startPlacementTimer(roomCode) {
     }
 
     currentRoom.placementTimeLeft--;
+    await saveRoom(roomCode, currentRoom);
 
     io.to(roomCode).emit("placementTick", {
       timeLeft: currentRoom.placementTimeLeft,
@@ -579,6 +580,9 @@ io.on("connection", async (socket) => {
       const hitCount = room.hits[enemy].length;
 
       const enemyDestroyed = hitCount >= totalCells;
+
+      await saveRoom(roomCode, room);
+
       socket.emit("attackResult", {
         cells: results,
         target: "enemy",
