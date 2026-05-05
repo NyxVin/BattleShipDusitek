@@ -468,13 +468,17 @@ io.on("connection", async (socket) => {
           }
         }
       }
-      if (!room.scores[player]) {
-        room.scores[player] = {
-          totalAttack: 0,
-          hitCount: 0,
-          missCount: 0,
-        };
-      }
+if (!room.scores[player]) {
+  room.scores[player] = {
+    totalAttack: 0,
+    hitCount: 0,
+    missCount: 0,
+
+    // 🔥 TAMBAHAN WAJIB
+    hitCells: [],
+    missCells: [],
+  };
+} 
 
       room.hasAttacked = true;
 
@@ -522,15 +526,12 @@ io.on("connection", async (socket) => {
           const ty = y + dy;
 
           const key = `${tx},${ty}`;
-          if (room.attackedCells[enemy].includes(key)) {
-            room.scores[player].missCount++;
-            room.scores[player].totalAttack++;
-            continue;
-          }
+const alreadyAttacked = room.attackedCells[enemy].includes(key);
 
-          if (!room.attackedCells[enemy].includes(key)) {
-            room.attackedCells[enemy].push(key);
-          }
+if (!alreadyAttacked) {
+  room.attackedCells[enemy].push(key);
+}
+
 
           let hit = false;
 
@@ -552,19 +553,33 @@ io.on("connection", async (socket) => {
             }
           }
 
-          if (hit) {
-            if (!room.hits[enemy].includes(key)) {
-              room.hits[enemy].push(key);
+if (hit) {
 
-              // 🔥 SIMPAN KE REDIS
-              await saveRoom(roomCode, room);
-            }
-            room.scores[player].hitCount++;
-          } else {
-            room.scores[player].missCount++;
-          }
+  // 🔥 FORCE MASUK KE hits (NO EXCEPTION)
+  if (!room.hits[enemy]) room.hits[enemy] = [];
 
-          room.scores[player].totalAttack++;
+  if (!room.hits[enemy].includes(key)) {
+    room.hits[enemy].push(key);
+  }
+
+  // 🔥 scoring
+  if (!room.scores[player].hitCells.includes(key)) {
+    room.scores[player].hitCells.push(key);
+    room.scores[player].hitCount++;
+  }
+
+} else {
+
+  if (!room.scores[player].missCells.includes(key)) {
+    room.scores[player].missCells.push(key);
+    room.scores[player].missCount++;
+  }
+
+}
+
+          room.scores[player].totalAttack =
+  room.scores[player].hitCount +
+  room.scores[player].missCount;
 
           results.push({ x: tx, y: ty, hit });
         }
@@ -580,7 +595,7 @@ io.on("connection", async (socket) => {
 
         return total;
       }
-
+      await saveRoom(roomCode, room);
       const enemyDestroyed = isAllShipsDestroyed(enemyShips, room.hits[enemy]);
 
       io.to(roomCode).emit("attackResult", {
