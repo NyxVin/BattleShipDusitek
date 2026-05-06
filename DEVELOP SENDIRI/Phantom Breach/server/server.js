@@ -69,6 +69,45 @@ async function cleanRoom(code) {
   delete rooms[code];
 }
 
+async function forceStartBattle(roomCode) {
+  let room = rooms[roomCode];
+
+  if (!room) return;
+
+  // cegah double start
+  if (room.phase === "battle") {
+    return;
+  }
+
+  room.phase = "battle";
+  room.currentTurn = room.host;
+  room.timeLeft = GAME_CONFIG.turn_time;
+  room.hasAttacked = false;
+
+  rooms[roomCode] = room;
+
+  if (roomIntervals[roomCode]) {
+    clearInterval(roomIntervals[roomCode]);
+    delete roomIntervals[roomCode];
+  }
+
+  await saveRoom(roomCode, room);
+
+  io.to(roomCode).emit("startGame", {
+    roomCode,
+    ships: room.ships,
+  });
+
+  io.to(roomCode).emit("game_tick", {
+    timeLeft: room.timeLeft,
+    currentTurn: room.currentTurn,
+  });
+
+  startGameLoop(roomCode);
+
+  console.log("🔥 BATTLE DIMULAI:", roomCode);
+}
+
 async function startGameLoop(roomCode) {
   if (!GAME_CONFIG) return;
 
@@ -77,19 +116,30 @@ async function startGameLoop(roomCode) {
   }
 
   roomIntervals[roomCode] = setInterval(async () => {
-    let room = await getRoom(roomCode);
+    let room = rooms[roomCode];
     if (!room) return;
 
-    room.timeLeft--;
+    if (!room.hasAttacked) {
+  room.timeLeft--;
+}
 
-    if (room.timeLeft <= 0) {
-      room.timeLeft = GAME_CONFIG.turn_time;
+if (!room.hasAttacked && room.timeLeft <= 0) {
 
-      const nextTurn = room.currentTurn === room.host ? room.guest : room.host;
+  room.timeLeft = GAME_CONFIG.turn_time;
 
-      room.currentTurn = nextTurn;
-      room.hasAttacked = false;
-    }
+  const nextTurn =
+    room.currentTurn === room.host
+      ? room.guest
+      : room.host;
+
+  room.currentTurn = nextTurn;
+
+  io.to(roomCode).emit("game_tick", {
+    timeLeft: room.timeLeft,
+    currentTurn: room.currentTurn,
+  });
+
+}
 
     await saveRoom(roomCode, room);
 
@@ -105,17 +155,35 @@ async function startPlacementTimer(roomCode) {
     console.log("❌ CONFIG BELUM MASUK (placement)!");
     return;
   }
-  let room = await getRoom(roomCode);
-  if (!room) return;
 
-  const duration = GAME_CONFIG.placement_time;
+  const room = rooms[roomCode];
 
-  room.placementTimeLeft = duration;
-  await saveRoom(roomCode, room); // 🔥 TAMBAHAN WAJIB
+  if (!room) {
+    console.log("❌ ROOM TIDAK ADA:", roomCode);
+    return;
+  }
+
+  // 🔥 CEGAH DOUBLE TIMER
+  if (roomIntervals[roomCode]) {
+    clearInterval(roomIntervals[roomCode]);
+    delete roomIntervals[roomCode];
+  }
+
+  room.placementTimeLeft = GAME_CONFIG.placement_time;
+
+  await saveRoom(roomCode, room);
 
   roomIntervals[roomCode] = setInterval(async () => {
-    let currentRoom = await getRoom(roomCode);
+    const currentRoom = rooms[roomCode];
+
     if (!currentRoom) {
+      clearInterval(roomIntervals[roomCode]);
+      delete roomIntervals[roomCode];
+      return;
+    }
+
+    // 🔥 JIKA SUDAH MASUK BATTLE STOP TIMER
+    if (currentRoom.phase === "battle") {
       clearInterval(roomIntervals[roomCode]);
       delete roomIntervals[roomCode];
       return;
@@ -127,26 +195,16 @@ async function startPlacementTimer(roomCode) {
       timeLeft: currentRoom.placementTimeLeft,
     });
 
-    if (currentRoom.placementTimeLeft <= 0) {
-      clearInterval(roomIntervals[roomCode]);
-      delete roomIntervals[roomCode];
+    await saveRoom(roomCode, currentRoom);
 
+    if (currentRoom.placementTimeLeft <= 0) {
       console.log("⏰ TIMER HABIS");
 
-      currentRoom.phase = "battle"; // 🔥 TAMBAHAN WAJIB
-
-      io.to(roomCode).emit("startGame", {
-        roomCode,
-        ships: currentRoom.ships,
-      });
-      currentRoom.currentTurn = currentRoom.host;
-      currentRoom.timeLeft = GAME_CONFIG.turn_time;
-
-      await saveRoom(roomCode, currentRoom);
-      startGameLoop(roomCode);
+      await forceStartBattle(roomCode);
     }
   }, 1000);
 }
+
 function isAllShipsDestroyed(ships, hits) {
   for (const ship of ships) {
     const w = ship.vertical ? ship.height : ship.width;
@@ -370,7 +428,7 @@ io.on("connection", async (socket) => {
     console.log("❌ CANCEL MATCH:", socket.id);
   });
   socket.on("playerReady", async ({ roomCode, ships }) => {
-    let room = await getRoom(roomCode);
+    let room = rooms[roomCode];
     if (!room) return;
 
     if (!Array.isArray(ships)) return;
@@ -391,39 +449,20 @@ io.on("connection", async (socket) => {
 
     console.log("READY:", room.playersReady);
 
-    if (room.playersReady === 2) {
-      if (roomIntervals[roomCode]) {
-        clearInterval(roomIntervals[roomCode]);
-        delete roomIntervals[roomCode];
-      }
+if (room.playersReady >= 2) {
+  rooms[roomCode] = room;
 
-      room.phase = "battle";
+  await saveRoom(roomCode, room);
 
-      // 🔥 TAMBAHAN 1 (WAJIB)
-      room.currentTurn = room.host;
-      room.timeLeft = GAME_CONFIG.turn_time;
-      room.hasAttacked = false;
+  await forceStartBattle(roomCode);
 
-      await saveRoom(roomCode, room); // 🔥 WAJIB DISIMPAN
-
-      io.to(roomCode).emit("startGame", {
-        roomCode,
-        ships: room.ships,
-      });
-
-      // 🔥 TAMBAHAN 2 (INI YANG NGILANG DI KODE KAMU)
-      io.to(roomCode).emit("game_tick", {
-        timeLeft: room.timeLeft,
-        currentTurn: room.currentTurn,
-      });
-
-      startGameLoop(roomCode);
-    }
+  return;
+}
     await saveRoom(roomCode, room);
   });
 
   socket.on("attack", async ({ roomCode, x, y, width, height }) => {
-    let room = await getRoom(roomCode);
+    let room = rooms[roomCode];
     if (!room) return;
 
     if (room.lock) return;
@@ -591,7 +630,7 @@ io.on("connection", async (socket) => {
         }
 
         setTimeout(async () => {
-          let latestRoom = await getRoom(roomCode);
+          let latestRoom = rooms[roomCode];
           if (!latestRoom) return;
 
           io.to(roomCode).emit("gameOver", {
@@ -608,28 +647,43 @@ io.on("connection", async (socket) => {
         return;
       }
 
-      const nextTurn = player === room.host ? room.guest : room.host;
+const nextTurn =
+  player === room.host
+    ? room.guest
+    : room.host;
 
-      setTimeout(async () => {
-        let latestRoom = await getRoom(roomCode);
-        if (!latestRoom) return;
+setTimeout(async () => {
+  let latestRoom = rooms[roomCode];
 
-        latestRoom.hasAttacked = false;
-        latestRoom.currentTurn = nextTurn;
-        latestRoom.timeLeft = GAME_CONFIG.turn_time;
+  if (!latestRoom) return;
 
-        await saveRoom(roomCode, latestRoom);
+  // 🔥 LANGSUNG GANTI TURN
+  latestRoom.currentTurn = nextTurn;
 
-        io.to(roomCode).emit("game_tick", {
-          timeLeft: latestRoom.timeLeft,
-          currentTurn: latestRoom.currentTurn,
-        });
-      }, 2000);
+  // 🔥 RESET TIMER
+  latestRoom.timeLeft = GAME_CONFIG.turn_time;
+
+  // 🔥 BOLEH SERANG LAGI
+  latestRoom.hasAttacked = false;
+
+  rooms[roomCode] = latestRoom;
+
+  await saveRoom(roomCode, latestRoom);
+
+  io.to(roomCode).emit("game_tick", {
+    timeLeft: latestRoom.timeLeft,
+    currentTurn: latestRoom.currentTurn,
+  });
+
+  console.log("🔄 TURN PINDAH:", nextTurn);
+
+}, 2000);
+
     } catch (err) {
       console.error("🔥 ERROR ATTACK:", err);
     } finally {
       try {
-        let latestRoom = await getRoom(roomCode);
+        let latestRoom = rooms[roomCode];
 
         if (latestRoom) {
           latestRoom.lock = false;

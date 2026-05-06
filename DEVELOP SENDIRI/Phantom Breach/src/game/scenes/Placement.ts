@@ -99,7 +99,7 @@ export class Placement extends Scene {
       if (!data || data.timeLeft == null) return;
 
       headerTimerText.setText(data.timeLeft + "s");
-      if (data.timeLeft === 1 && !isReady) {
+      if (data.timeLeft <= 0 && !isReady) {
         console.log("🔥 AUTO KIRIM SHIPS (TIMER HABIS)");
 
         socket.emit("playerReady", {
@@ -182,9 +182,9 @@ export class Placement extends Scene {
             tile.on("pointerdown", () => {
               previewGraphics.forEach((g) => g.destroy());
               previewGraphics = [];
-              isDragging = true;
+              
               if (isReady) return;
-
+              isDragging = true;
               selectedShipIndex = index;
 
               const allCards = this.children.list.filter((obj) => obj instanceof Phaser.GameObjects.Container);
