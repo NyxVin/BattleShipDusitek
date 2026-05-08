@@ -3,6 +3,7 @@ import { DEFAULT_CONFIG } from "../config/defaultConfig";
 import { socket } from "../socket";
 import { mergeConfig } from "../config/mergeConfig";
 import { loadConfig } from "../config/loadConfig";
+import { SessionManager } from "../../session/sessionManager";
 
 export class Boot extends Scene {
   constructor() {
@@ -35,8 +36,27 @@ export class Boot extends Scene {
     this.registry.set("gameConfig", finalConfig);
 
     // 🔥 5. KIRIM KE SERVER
-    socket.emit("syncConfig", finalConfig.config);
+    socket.emit(
+  "syncConfig",
+  finalConfig.config
+);
 
+    // 🔥 SESSION DATA DARI PORTAL
+    const params = new URLSearchParams(window.location.search);
+
+    SessionManager.init({
+      session_id: params.get("session_id"),
+      session_token: params.get("session_token"),
+      api_base_url: params.get("api_base_url"),
+      expires_at: params.get("expires_at"),
+    });
+    
+    if (
+  !SessionManager.sessionId ||
+  !SessionManager.sessionToken
+) {
+  console.warn("⚠️ SESSION MODE NONAKTIF");
+}
     // 🔥 6. LANJUT GAME
     this.scene.start("Preloader");
   }

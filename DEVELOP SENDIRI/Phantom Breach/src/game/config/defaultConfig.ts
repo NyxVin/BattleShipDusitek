@@ -4,7 +4,7 @@ export const DEFAULT_CONFIG = {
   config: {
     gameplay: {
       turn_time: 15,
-      placement_time: 30,
+      placement_time: 10,
 
       ship_cooldowns: {
         spaceship1: 0,

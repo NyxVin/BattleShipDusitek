@@ -9,6 +9,7 @@ const matchmakingQueue = [];
 const playersInQueue = new Set();
 let GAME_CONFIG = null;
 const app = express();
+app.use(express.json());
 const server = http.createServer(app);
 
 const io = new Server(server, {
@@ -252,7 +253,36 @@ function buildScore(room, playerId, isWinner = false) {
   };
 }
 
+
+// =========================
+// SESSION API
+// =========================
+
+app.post("/game-sessions/submit-score", (req, res) => {
+
+  console.log("🏆 SUBMIT SCORE:");
+  console.log(req.body);
+
+  return res.json({
+    success: true,
+    message: "Score diterima",
+  });
+});
+
+app.post("/game-sessions/end", (req, res) => {
+
+  console.log("🛑 END SESSION:");
+  console.log(req.body);
+
+  return res.json({
+    success: true,
+    message: "Session selesai",
+  });
+});
+
+
 io.on("connection", async (socket) => {
+  
   console.log("USER CONNECT:", socket.id);
   for (const code in rooms) {
     let room = await getRoom(code);
@@ -762,8 +792,8 @@ setTimeout(async () => {
       placement_time: config.gameplay?.placement_time ?? 30,
       ship_cooldowns: config.gameplay?.ship_cooldowns ?? {},
       score: {
-        hit: config.score?.hit ?? 10,
-        win_bonus: config.score?.win_bonus ?? 50,
+          hit: config.gameplay?.score?.hit ?? 10,
+  win_bonus: config.gameplay?.score?.win_bonus ?? 50,
       },
     };
 

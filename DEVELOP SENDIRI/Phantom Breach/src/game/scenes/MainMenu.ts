@@ -1,5 +1,6 @@
 import { Scene } from "phaser";
 import { socket } from "../socket";
+import { endSession } from "../../session/endSession";
 
 export class MainMenu extends Scene {
   mainMenuContainer!: Phaser.GameObjects.Container;
@@ -17,6 +18,9 @@ export class MainMenu extends Scene {
   }
 
   create() {
+window.onbeforeunload = () => {
+  endSession();
+};
     this.add.image(0, 0, "background").setOrigin(0, 0);
     this.bgm = this.sound.add("soundgame", {
       loop: true,
@@ -25,6 +29,7 @@ export class MainMenu extends Scene {
 
     this.bgm.play();
 
+    
 
     socket.off("startGame");
 

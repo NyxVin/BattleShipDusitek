@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { submitScore } from "../../session/submitScore";
 
 type ResultData = {
   winner: string;
@@ -37,6 +38,17 @@ export class Result extends Phaser.Scene {
     console.log("🔥 RESULT DATA:", data);
 
     const isWin = data.winner === data.myId;
+    setTimeout(() => {
+  submitScore({
+  score: data.score,
+  result: isWin ? "WIN" : "LOSE",
+
+  totalAttack: data.total,
+  hitCount: data.hit,
+  missCount: data.miss,
+  accuracy: data.accuracy,
+  });
+}, 100);
     if (this.sound.get("winner")) this.sound.stopByKey("winner");
     if (this.sound.get("lose")) this.sound.stopByKey("lose");
 
