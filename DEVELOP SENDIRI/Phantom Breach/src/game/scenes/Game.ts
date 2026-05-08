@@ -925,3 +925,6 @@ if (hit) {
     this.scene.start("Result", resultData);
   }
 }
+
+
+// bismillah
