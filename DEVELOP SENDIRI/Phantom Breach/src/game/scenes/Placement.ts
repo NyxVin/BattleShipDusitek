@@ -90,7 +90,7 @@ export class Placement extends Scene {
       }));
     };
     const cfg = this.registry.get("gameConfig");
-    let currentTime = data?.timeLeft ?? cfg.config.gameplay.placement_time;
+    let currentTime = data?.timeLeft ?? cfg.schema.gameplay.placement_time;
     headerTimerText.setText(currentTime.toString());
     socket.off("placementTick");
     socket.on("placementTick", (data: any) => {

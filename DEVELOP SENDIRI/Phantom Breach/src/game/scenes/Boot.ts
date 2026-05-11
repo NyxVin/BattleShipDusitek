@@ -38,18 +38,22 @@ export class Boot extends Scene {
     // 🔥 5. KIRIM KE SERVER
     socket.emit(
   "syncConfig",
-  finalConfig.config
+  finalConfig.schema
 );
 
     // 🔥 SESSION DATA DARI PORTAL
     const params = new URLSearchParams(window.location.search);
 
-    SessionManager.init({
-      session_id: params.get("session_id"),
-      session_token: params.get("session_token"),
-      api_base_url: params.get("api_base_url"),
-      expires_at: params.get("expires_at"),
-    });
+SessionManager.init({
+  session_id: params.get("session_id"),
+  session_token: params.get("session_token"),
+  api_base_url: params.get("api_base_url"),
+  expires_at: params.get("expires_at"),
+  user_id: params.get("user_id"),
+  username: params.get("username"),
+  event_id: params.get("event_id"),
+  game_id: params.get("game_id"),
+});
     
     if (
   !SessionManager.sessionId ||

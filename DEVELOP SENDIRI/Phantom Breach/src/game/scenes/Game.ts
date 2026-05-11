@@ -59,8 +59,8 @@ export class Game extends Scene {
 
   create() {
     const cfg = this.registry.get("gameConfig");
-    this.turnTime = cfg.config.gameplay.turn_time;
-    const cooldowns = cfg.config?.gameplay?.ship_cooldowns;
+    this.turnTime = cfg.schema.gameplay.turn_time;
+    const cooldowns = cfg.schema?.gameplay?.ship_cooldowns;
 
     this.shipsUI.forEach((ship) => {
       ship.cooldown = cooldowns?.[ship.key] ?? ship.cooldown;
@@ -109,12 +109,12 @@ export class Game extends Scene {
     const header = this.add.container(centerX, 45);
     const panel = this.add.image(0, 0, "panel_top").setScale(0.5);
     const dot = this.add.circle(-130, 0, 5, 0xfacc15);
-    this.turnText = this.add.text(-117, -18, cfg.config.ui.header.title, {
+    this.turnText = this.add.text(-117, -18, cfg.schema.ui.header.title, {
       fontSize: "18px",
       fontFamily: "Lilita One",
       color: "#1E3A8A",
     });
-    const subtitle = this.add.text(-115, 3, cfg.config.ui.header.subtitle, {
+    const subtitle = this.add.text(-115, 3, cfg.schema.ui.header.subtitle, {
       fontSize: "12px",
       fontFamily: "Lilita One",
       color: "#6B7280",
@@ -285,7 +285,7 @@ export class Game extends Scene {
 
       container.on("pointerdown", () => {
         if (ship.cooldownActive && ship.cooldownLeft > 0) {
-          this.showTurnPopup(cfg.config.ui.text.cooldown, cfg.config.ui.colors.enemy);
+          this.showTurnPopup(cfg.schema.ui.text.cooldown, cfg.schema.ui.colors.enemy);
           return;
         }
         this.selectedShipIndex = i;
@@ -325,7 +325,7 @@ export class Game extends Scene {
         const ship = this.shipsUI[this.selectedShipIndex];
 
         if (ship.cooldownActive && ship.cooldownLeft > 0) {
-          this.showTurnPopup(cfg.config.ui.text.cooldown, cfg.config.ui.colors.enemy);
+          this.showTurnPopup(cfg.schema.ui.text.cooldown, cfg.schema.ui.colors.enemy);
           return;
         }
 
@@ -414,9 +414,9 @@ if (data.currentTurn === socket.id) {
 
         // popup tetap
         if (this.isMyTurn) {
-          this.showTurnPopup(cfg.config.ui.text.turn, cfg.config.ui.colors.turn);
+          this.showTurnPopup(cfg.schema.ui.text.turn, cfg.schema.ui.colors.turn);
         } else {
-          this.showTurnPopup(cfg.config.ui.text.enemy, cfg.config.ui.colors.enemy);
+          this.showTurnPopup(cfg.schema.ui.text.enemy, cfg.schema.ui.colors.enemy);
         }
       }
     });
@@ -585,7 +585,7 @@ if (hit) {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
       this.lastUsedShipIndex = -1;
-      this.showTurnPopup(cfg.config.ui.text.invalid, cfg.config.ui.colors.invalid);
+      this.showTurnPopup(cfg.schema.ui.text.invalid, cfg.schema.ui.colors.invalid);
     });
 
     socket.on("gameOver", (data) => {
@@ -706,7 +706,7 @@ if (hit) {
     const ship = this.shipsUI[this.selectedShipIndex];
     if (ship.cooldownActive && ship.cooldownLeft > 0) {
       console.log("❌ MASIH COOLDOWN (ATTACK)");
-      this.showTurnPopup(cfg.config.ui.text.cooldown, cfg.config.ui.colors.enemy);
+      this.showTurnPopup(cfg.schema.ui.text.cooldown, cfg.schema.ui.colors.enemy);
       return;
     }
     const w = this.isVerticalAttack ? ship.height : ship.width;
@@ -740,7 +740,7 @@ if (hit) {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
 
-      this.showTurnPopup(cfg.config.ui.text.invalid, cfg.config.ui.colors.invalid);
+      this.showTurnPopup(cfg.schema.ui.text.invalid, cfg.schema.ui.colors.invalid);
       return;
     }
     if (!valid) {
@@ -753,7 +753,7 @@ if (hit) {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
 
-      this.showTurnPopup(cfg.config.ui.text.invalid, cfg.config.ui.colors.invalid);
+      this.showTurnPopup(cfg.schema.ui.text.invalid, cfg.schema.ui.colors.invalid);
       return;
     }
     console.log("🔥 ATTACK DIKIRIM:", { x, y, w, h });

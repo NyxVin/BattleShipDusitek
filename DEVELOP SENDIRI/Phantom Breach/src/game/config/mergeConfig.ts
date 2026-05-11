@@ -3,51 +3,51 @@ export function mergeConfig(defaultCfg: any, cmsCfg: any) {
 
   return {
     ...defaultCfg,
-    config: {
-      ...defaultCfg.config,
-      ...cmsCfg.config,
+    schema: {
+      ...defaultCfg.schema,
+      ...cmsCfg.schema,
 
       gameplay: {
-        ...defaultCfg.config.gameplay,
-        ...cmsCfg.config?.gameplay,
+        ...defaultCfg.schema.gameplay,
+        ...cmsCfg.schema?.gameplay,
 
         ship_cooldowns:
-          cmsCfg.config?.gameplay?.ship_cooldowns ??
-          defaultCfg.config.gameplay.ship_cooldowns,
+          cmsCfg.schema?.gameplay?.ship_cooldowns ??
+          defaultCfg.schema.gameplay.ship_cooldowns,
 
         score: {
-          ...defaultCfg.config.gameplay.score,
-          ...cmsCfg.config?.gameplay?.score,
+          ...defaultCfg.schema.gameplay.score,
+          ...cmsCfg.schema?.gameplay?.score,
         },
       },
 
       assets: {
-        ...defaultCfg.config.assets,
-        ...cmsCfg.config?.assets,
+        ...defaultCfg.schema.assets,
+        ...cmsCfg.schema?.assets,
       },
 
       ui: {
-        ...defaultCfg.config.ui,
-        ...cmsCfg.config?.ui,
+        ...defaultCfg.schema.ui,
+        ...cmsCfg.schema?.ui,
 
         text: {
-          ...defaultCfg.config.ui.text,
-          ...cmsCfg.config?.ui?.text,
+          ...defaultCfg.schema.ui.text,
+          ...cmsCfg.schema?.ui?.text,
         },
 
         colors: {
-          ...defaultCfg.config.ui.colors,
-          ...cmsCfg.config?.ui?.colors,
+          ...defaultCfg.schema.ui.colors,
+          ...cmsCfg.schema?.ui?.colors,
         },
 
         header: {
-          ...defaultCfg.config.ui.header,
-          ...cmsCfg.config?.ui?.header,
+          ...defaultCfg.schema.ui.header,
+          ...cmsCfg.schema?.ui?.header,
         },
 
         result: {
-          ...defaultCfg.config.ui.result,
-          ...cmsCfg.config?.ui?.result,
+          ...defaultCfg.schema.ui.result,
+          ...cmsCfg.schema?.ui?.result,
         },
       },
     },

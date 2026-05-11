@@ -1,9 +1,11 @@
 {
   "version": "v1",
-  "config": {
+  "event_id": 1,
+  "game_id": 1,
+  "schema": {
     "gameplay": {
       "turn_time": 15,
-      "placement_time": 50,
+      "placement_time": 30,
       "ship_cooldowns": {
         "spaceship1": 0,
         "spaceship2": 3,

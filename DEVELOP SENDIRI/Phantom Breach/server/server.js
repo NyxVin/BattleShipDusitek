@@ -782,7 +782,7 @@ setTimeout(async () => {
 
     if (!config) return;
 
-    if (!config.score) {
+    if (!config.gameplay?.score) {
       console.error("❌ SCORE TIDAK ADA DI CONFIG!");
     }
 

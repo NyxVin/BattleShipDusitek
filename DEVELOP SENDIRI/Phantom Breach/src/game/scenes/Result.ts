@@ -67,7 +67,7 @@ export class Result extends Phaser.Scene {
     }
 
     this.add
-      .text(width / 2, 180, isWin ? cfg.config.ui.result.win_text : cfg.config.ui.result.lose_text, {
+      .text(width / 2, 180, isWin ? cfg.schema.ui.result.win_text : cfg.schema.ui.result.lose_text, {
         fontFamily: "Lilita One",
         fontSize: "44px",
         color: isWin ? "#FFC700" : "#FFFFFF",
@@ -77,7 +77,7 @@ export class Result extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 220, isWin ? cfg.config.ui.result.win_desc : cfg.config.ui.result.lose_desc, {
+      .text(width / 2, 220, isWin ? cfg.schema.ui.result.win_desc : cfg.schema.ui.result.lose_desc, {
         fontFamily: "poppins",
         fontStyle: "bold",
         fontSize: "12px",

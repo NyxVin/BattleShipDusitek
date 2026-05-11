@@ -1,7 +1,9 @@
 export const DEFAULT_CONFIG = {
   version: "v1",
+  event_id: 0,
+  game_id: 0,
 
-  config: {
+  schema: {
     gameplay: {
       turn_time: 15,
       placement_time: 10,
