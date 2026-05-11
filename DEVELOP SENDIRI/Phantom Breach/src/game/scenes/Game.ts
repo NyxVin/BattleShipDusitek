@@ -399,18 +399,18 @@ export class Game extends Scene {
       if (prevTurn !== data.currentTurn) {
         // 🔥 HANYA SAAT GILIRAN KAMU
         // 🔥 JIKA SEBELUMNYA GILIRAN KAMU
-        if (prevTurn === socket.id) {
-          this.shipsUI.forEach((ship) => {
-            if (ship.cooldownActive && ship.cooldownLeft > 0) {
-              ship.cooldownLeft--;
+if (data.currentTurn === socket.id) {
+  this.shipsUI.forEach((ship) => {
+    if (ship.cooldownActive && ship.cooldownLeft > 0) {
+      ship.cooldownLeft--;
 
-              if (ship.cooldownLeft <= 0) {
-                ship.cooldownLeft = 0;
-                ship.cooldownActive = false;
-              }
-            }
-          });
-        }
+      if (ship.cooldownLeft <= 0) {
+        ship.cooldownLeft = 0;
+        ship.cooldownActive = false;
+      }
+    }
+  });
+}
 
         // popup tetap
         if (this.isMyTurn) {

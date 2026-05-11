@@ -120,9 +120,8 @@ async function startGameLoop(roomCode) {
     let room = rooms[roomCode];
     if (!room) return;
 
-    if (!room.hasAttacked) {
   room.timeLeft--;
-}
+
 
 if (!room.hasAttacked && room.timeLeft <= 0) {
 
