@@ -37,6 +37,7 @@ async function deleteRoomRedis(code) {
 
 const roomIntervals = {};
 const disconnectTimers = {};
+const connectedUsers = {};
 const ROOM_IDLE_EXPIRE = 20000;
 
 setInterval(async () => {
@@ -120,26 +121,20 @@ async function startGameLoop(roomCode) {
     let room = rooms[roomCode];
     if (!room) return;
 
-  room.timeLeft--;
+    room.timeLeft--;
 
+    if (!room.hasAttacked && room.timeLeft <= 0) {
+      room.timeLeft = GAME_CONFIG.turn_time;
 
-if (!room.hasAttacked && room.timeLeft <= 0) {
+      const nextTurn = room.currentTurn === room.host ? room.guest : room.host;
 
-  room.timeLeft = GAME_CONFIG.turn_time;
+      room.currentTurn = nextTurn;
 
-  const nextTurn =
-    room.currentTurn === room.host
-      ? room.guest
-      : room.host;
-
-  room.currentTurn = nextTurn;
-
-  io.to(roomCode).emit("game_tick", {
-    timeLeft: room.timeLeft,
-    currentTurn: room.currentTurn,
-  });
-
-}
+      io.to(roomCode).emit("game_tick", {
+        timeLeft: room.timeLeft,
+        currentTurn: room.currentTurn,
+      });
+    }
 
     await saveRoom(roomCode, room);
 
@@ -252,13 +247,11 @@ function buildScore(room, playerId, isWinner = false) {
   };
 }
 
-
 // =========================
 // SESSION API
 // =========================
 
 app.post("/game-sessions/submit-score", (req, res) => {
-
   console.log("🏆 SUBMIT SCORE:");
   console.log(req.body);
 
@@ -269,7 +262,6 @@ app.post("/game-sessions/submit-score", (req, res) => {
 });
 
 app.post("/game-sessions/end", (req, res) => {
-
   console.log("🛑 END SESSION:");
   console.log(req.body);
 
@@ -279,29 +271,90 @@ app.post("/game-sessions/end", (req, res) => {
   });
 });
 
-
 io.on("connection", async (socket) => {
-  
   console.log("USER CONNECT:", socket.id);
-  for (const code in rooms) {
-    let room = await getRoom(code);
-    if (!room.disconnectPlayer) continue;
-    if (room.disconnectPlayer.oldId !== socket.id) continue;
+  socket.on("auth", async (data) => {
+    if (!data.userId || !data.sessionToken) {
+      console.log("❌ AUTH INVALID");
 
-    console.log("✅ RECONNECT KE ROOM:", code);
-
-    socket.join(code);
-    room.disconnectPlayer = null;
-    if (disconnectTimers[socket.id]) {
-      clearTimeout(disconnectTimers[socket.id]);
-      delete disconnectTimers[socket.id];
+      return;
     }
-    io.to(code).emit("playerReconnected", {
-      player: socket.id,
-    });
+    connectedUsers[socket.id] = {
+      userId: data.userId,
+      username: data.username,
+      sessionToken: data.sessionToken,
+      sessionId: data.sessionId,
+      eventId: data.eventId,
+      gameId: data.gameId,
+    };
 
-    break;
-  }
+    console.log("🔥 SOCKET BERHASIL DIMAPPING");
+    socket.emit("authSuccess");
+    console.log(socket.id);
+
+    console.log(connectedUsers[socket.id]);
+
+    // =========================
+    // RECONNECT CHECK
+    // =========================
+    console.log("🔥 AUTH MASUK:");
+    console.log(data);
+    for (const code in rooms) {
+      let room = rooms[code];
+      console.log("ROOM DISCONNECT PLAYER:");
+      console.log(room.disconnectPlayer);
+
+      console.log("AUTH USER:");
+      console.log(data.userId);
+      if (!room?.disconnectPlayer) continue;
+
+      // 🔥 CEK USER ID
+      if (room.disconnectPlayer.userId !== data.userId) {
+        continue;
+      }
+
+      console.log("✅ RECONNECT BERHASIL:", code);
+
+      // 🔥 JOIN ROOM LAGI
+      socket.join(code);
+      if (room.hostSocket === room.disconnectPlayer.oldSocketId) {
+        room.hostSocket = socket.id;
+      }
+
+      if (room.guestSocket === room.disconnectPlayer.oldSocketId) {
+        room.guestSocket = socket.id;
+      }
+
+      // 🔥 CANCEL AUTO LOSE
+      const oldSocketId = room.disconnectPlayer.oldSocketId;
+
+      if (disconnectTimers[oldSocketId]) {
+        clearTimeout(disconnectTimers[oldSocketId]);
+
+        delete disconnectTimers[oldSocketId];
+      }
+
+      // 🔥 RESET DISCONNECT
+      room.disconnectPlayer = null;
+
+      rooms[code] = room;
+
+      await saveRoom(code, room);
+
+      // 🔥 KIRIM GAME STATE
+      socket.emit("reconnectSuccess", {
+        roomCode: code,
+        room,
+      });
+
+      io.to(code).emit("playerReconnected", {
+        player: data.userId,
+      });
+
+      break;
+    }
+  });
+
   socket.on("createRoom", async () => {
     const roomCount = Object.keys(rooms).length;
 
@@ -318,8 +371,10 @@ io.on("connection", async (socket) => {
 
     const newRoom = {
       code,
-      host: socket.id,
+      host: connectedUsers[socket.id].userId,
       guest: null,
+      hostSocket: socket.id,
+      guestSocket: null,
       playersReady: 0,
       ships: {},
       hits: {},
@@ -351,13 +406,14 @@ io.on("connection", async (socket) => {
       return;
     }
 
-    room.guest = socket.id;
+    room.guest = connectedUsers[socket.id].userId;
+    room.guestSocket = socket.id;
     await saveRoom(code, room);
     rooms[code] = room; // biar logic lama tetap jalan
     socket.join(code);
 
     socket.emit("roomJoined", code);
-    io.to(room.host).emit("playerJoined", code);
+    io.to(room.hostSocket).emit("playerJoined", code);
 
     setTimeout(() => {
       io.to(code).emit("goToPlacement", {
@@ -370,6 +426,10 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("findMatch", () => {
+    if (!connectedUsers[socket.id]) {
+      console.log("❌ SOCKET BELUM AUTH");
+      return;
+    }
     for (let i = matchmakingQueue.length - 1; i >= 0; i--) {
       if (matchmakingQueue[i].id === socket.id) {
         matchmakingQueue.splice(i, 1);
@@ -408,8 +468,11 @@ io.on("connection", async (socket) => {
 
       rooms[code] = {
         code,
-        host: p1.id,
-        guest: p2.id,
+        host: connectedUsers[p1.id].userId,
+        guest: connectedUsers[p2.id].userId,
+
+        hostSocket: p1.id,
+        guestSocket: p2.id,
         playersReady: 0,
         ships: {},
         hits: {},
@@ -457,6 +520,10 @@ io.on("connection", async (socket) => {
     console.log("❌ CANCEL MATCH:", socket.id);
   });
   socket.on("playerReady", async ({ roomCode, ships }) => {
+    if (!connectedUsers[socket.id]) {
+      console.log("❌ SOCKET BELUM AUTH");
+      return;
+    }
     let room = rooms[roomCode];
     if (!room) return;
 
@@ -468,29 +535,35 @@ io.on("connection", async (socket) => {
       }
     }
 
-    room.ships[socket.id] = ships;
+    const userId = connectedUsers[socket.id].userId;
+
+    room.ships[userId] = ships;
     if (!room.readyPlayers) room.readyPlayers = [];
 
-    if (!room.readyPlayers.includes(socket.id)) {
-      room.readyPlayers.push(socket.id);
+    if (!room.readyPlayers.includes(userId)) {
+      room.readyPlayers.push(userId);
       room.playersReady++;
     }
 
     console.log("READY:", room.playersReady);
 
-if (room.playersReady >= 2) {
-  rooms[roomCode] = room;
+    if (room.playersReady >= 2) {
+      rooms[roomCode] = room;
 
-  await saveRoom(roomCode, room);
+      await saveRoom(roomCode, room);
 
-  await forceStartBattle(roomCode);
+      await forceStartBattle(roomCode);
 
-  return;
-}
+      return;
+    }
     await saveRoom(roomCode, room);
   });
 
   socket.on("attack", async ({ roomCode, x, y, width, height }) => {
+    if (!connectedUsers[socket.id]) {
+      console.log("❌ SOCKET BELUM AUTH");
+      return;
+    }
     let room = rooms[roomCode];
     if (!room) return;
 
@@ -499,7 +572,7 @@ if (room.playersReady >= 2) {
 
     await saveRoom(roomCode, room);
     try {
-      const player = socket.id;
+      const player = connectedUsers[socket.id].userId;
       if (room.currentTurn !== player) {
         room.hasAttacked = false;
         return;
@@ -676,38 +749,33 @@ if (room.playersReady >= 2) {
         return;
       }
 
-const nextTurn =
-  player === room.host
-    ? room.guest
-    : room.host;
+      const nextTurn = player === room.host ? room.guest : room.host;
 
-setTimeout(async () => {
-  let latestRoom = rooms[roomCode];
+      setTimeout(async () => {
+        let latestRoom = rooms[roomCode];
 
-  if (!latestRoom) return;
+        if (!latestRoom) return;
 
-  // 🔥 LANGSUNG GANTI TURN
-  latestRoom.currentTurn = nextTurn;
+        // 🔥 LANGSUNG GANTI TURN
+        latestRoom.currentTurn = nextTurn;
 
-  // 🔥 RESET TIMER
-  latestRoom.timeLeft = GAME_CONFIG.turn_time;
+        // 🔥 RESET TIMER
+        latestRoom.timeLeft = GAME_CONFIG.turn_time;
 
-  // 🔥 BOLEH SERANG LAGI
-  latestRoom.hasAttacked = false;
+        // 🔥 BOLEH SERANG LAGI
+        latestRoom.hasAttacked = false;
 
-  rooms[roomCode] = latestRoom;
+        rooms[roomCode] = latestRoom;
 
-  await saveRoom(roomCode, latestRoom);
+        await saveRoom(roomCode, latestRoom);
 
-  io.to(roomCode).emit("game_tick", {
-    timeLeft: latestRoom.timeLeft,
-    currentTurn: latestRoom.currentTurn,
-  });
+        io.to(roomCode).emit("game_tick", {
+          timeLeft: latestRoom.timeLeft,
+          currentTurn: latestRoom.currentTurn,
+        });
 
-  console.log("🔄 TURN PINDAH:", nextTurn);
-
-}, 2000);
-
+        console.log("🔄 TURN PINDAH:", nextTurn);
+      }, 2000);
     } catch (err) {
       console.error("🔥 ERROR ATTACK:", err);
     } finally {
@@ -727,7 +795,6 @@ setTimeout(async () => {
         console.error("❌ ERROR SAVE FINAL:", e);
       }
     }
-
   });
 
   socket.on("disconnect", async () => {
@@ -739,31 +806,42 @@ setTimeout(async () => {
       matchmakingQueue.splice(index, 1);
     }
     for (const code in rooms) {
-      let room = await getRoom(code);
+      let room = rooms[code];
+      const userId = connectedUsers[socket.id]?.userId;
 
-      if (room.host === socket.id || room.guest === socket.id) {
-        console.log("⏳ WAIT 10 DETIK...");
-
+      if (room.host === userId || room.guest === userId) {
         room.disconnectPlayer = {
-          oldId: socket.id,
+          oldSocketId: socket.id,
+          userId: connectedUsers[socket.id]?.userId,
         };
+
+        console.log("🔥 DISCONNECT PLAYER DISIMPAN:");
+        console.log(room.disconnectPlayer);
+
+        await saveRoom(code, room);
+
         if (disconnectTimers[socket.id]) {
           clearTimeout(disconnectTimers[socket.id]);
         }
-        disconnectTimers[socket.id] = setTimeout(() => {
+        disconnectTimers[socket.id] = setTimeout(async() => {
           console.log("💀 AUTO LOSE");
 
-          const winner = room.host === socket.id ? room.guest : room.host;
+          const userId = connectedUsers[socket.id]?.userId;
+
+const winner =
+  room.host === userId
+    ? room.guest
+    : room.host;
 
           if (!winner) return;
 
           const winnerScore = buildScore(room, winner, true);
-          const loserScore = buildScore(room, socket.id, false);
+          const loserScore = buildScore(room, userId, false);
           io.to(code).emit("gameOver", {
             winner,
             scores: {
               [winner]: winnerScore,
-              [socket.id]: loserScore,
+              [userId]: loserScore,
             },
           });
           if (roomIntervals[code]) {
@@ -771,8 +849,8 @@ setTimeout(async () => {
             delete roomIntervals[code];
           }
 
-          cleanRoom(code);
-        }, 10000); // ⏱️ 10 DETIK
+          await cleanRoom(code);
+        }, 30000); // ⏱️ 10 DETIK
       }
     }
   });
@@ -791,8 +869,8 @@ setTimeout(async () => {
       placement_time: config.gameplay?.placement_time ?? 30,
       ship_cooldowns: config.gameplay?.ship_cooldowns ?? {},
       score: {
-          hit: config.gameplay?.score?.hit ?? 10,
-  win_bonus: config.gameplay?.score?.win_bonus ?? 50,
+        hit: config.gameplay?.score?.hit ?? 10,
+        win_bonus: config.gameplay?.score?.win_bonus ?? 50,
       },
     };
 

@@ -5,7 +5,7 @@
   "schema": {
     "gameplay": {
       "turn_time": 15,
-      "placement_time": 30,
+      "placement_time": 20,
       "ship_cooldowns": {
         "spaceship1": 0,
         "spaceship2": 3,
@@ -66,3 +66,5 @@
     }
   }
 }
+
+

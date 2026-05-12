@@ -1,5 +1,5 @@
 import { Scene } from "phaser";
-import { socket } from "../socket";
+import { socket, isAuthenticated } from "../socket";
 import { endSession } from "../../session/endSession";
 
 export class MainMenu extends Scene {
@@ -630,9 +630,29 @@ window.onbeforeunload = () => {
       this.mainMenuContainer.setVisible(false);
 
       const { container, cancelButton, fakeInterval } = createMatchmakingUI();
+      if (!socket.connected) {
+
+  console.log("❌ SOCKET BELUM CONNECT");
+
+  return;
+}
+
+
+if (!isAuthenticated) {
+
+  console.log("❌ BELUM AUTH");
+
+  return;
+}
+
 
       socket.emit("findMatch");
+      if (!isAuthenticated) {
 
+  console.log("❌ BELUM AUTH");
+
+  return;
+}
       cancelButton.on("pointerdown", () => {
         isSearching = false; // 🔥 RESET BIAR BISA SEARCH LAGI
 

@@ -1,5 +1,6 @@
 import { Scene } from "phaser";
 import { socket } from "../socket";
+import { SessionManager } from "../../session/sessionManager";
 
 type PlayerScore = {
   totalAttack: number;
@@ -203,7 +204,7 @@ export class Game extends Scene {
       .setAlpha(0);
 
     if (this.gameData && this.gameData.ships) {
-      const myId = socket.id;
+      const myId = SessionManager.userId;
       const myShips = this.gameData.ships[myId];
       console.log("MY ID:", myId);
       console.log("ALL SHIPS:", this.gameData.ships);
@@ -212,7 +213,7 @@ export class Game extends Scene {
       this.time.delayedCall(100, () => {
         if (!this.scene.isActive()) return;
 
-        const myId = socket.id;
+        const myId = SessionManager.userId;
         const myShips = this.gameData?.ships?.[myId];
 
         if (myShips) {
@@ -393,24 +394,24 @@ export class Game extends Scene {
       const prevTurn = lastTurn;
       lastTurn = data.currentTurn;
 
-      this.isMyTurn = data.currentTurn === socket.id;
+      this.isMyTurn = data.currentTurn === SessionManager.userId;
       this.turnTime = data.timeLeft;
 
       if (prevTurn !== data.currentTurn) {
         // 🔥 HANYA SAAT GILIRAN KAMU
         // 🔥 JIKA SEBELUMNYA GILIRAN KAMU
-if (data.currentTurn === socket.id) {
-  this.shipsUI.forEach((ship) => {
-    if (ship.cooldownActive && ship.cooldownLeft > 0) {
-      ship.cooldownLeft--;
+        if (data.currentTurn === SessionManager.userId) {
+          this.shipsUI.forEach((ship) => {
+            if (ship.cooldownActive && ship.cooldownLeft > 0) {
+              ship.cooldownLeft--;
 
-      if (ship.cooldownLeft <= 0) {
-        ship.cooldownLeft = 0;
-        ship.cooldownActive = false;
-      }
-    }
-  });
-}
+              if (ship.cooldownLeft <= 0) {
+                ship.cooldownLeft = 0;
+                ship.cooldownActive = false;
+              }
+            }
+          });
+        }
 
         // popup tetap
         if (this.isMyTurn) {
@@ -427,7 +428,7 @@ if (data.currentTurn === socket.id) {
         this.isAnimating = false;
         return;
       }
-      this.sfx.misil.play({ volume: attackerId === socket.id ? 0.5 : 0.4 });
+      this.sfx.misil.play({ volume: attackerId === SessionManager.userId ? 0.5 : 0.4 });
       this.isAnimating = true;
       this.time.delayedCall(5000, () => {
         if (this.isAnimating) {
@@ -444,25 +445,25 @@ if (data.currentTurn === socket.id) {
       let pending = cells.length;
       let isAnyHit = false;
       cells.forEach(({ x, y, hit }: any) => {
-        const isEnemy = attackerId === socket.id;
-// 🔥 FIX: UPDATE STATE GRID TANPA TINT
-if (hit) {
-  if (isEnemy) {
-    this.markHit(x, y); // enemy tetap pakai fungsi ini
-  } else {
-    const cell = this.selfGrid[y][x];
-    cell.hit = true;
-    cell.attacked = true;
-  }
-} else {
-  if (isEnemy) {
-    this.markMiss(x, y);
-  } else {
-    const cell = this.selfGrid[y][x];
-    cell.hit = false;
-    cell.attacked = true;
-  }
-}
+        const isEnemy = attackerId === SessionManager.userId;
+        // 🔥 FIX: UPDATE STATE GRID TANPA TINT
+        if (hit) {
+          if (isEnemy) {
+            this.markHit(x, y); // enemy tetap pakai fungsi ini
+          } else {
+            const cell = this.selfGrid[y][x];
+            cell.hit = true;
+            cell.attacked = true;
+          }
+        } else {
+          if (isEnemy) {
+            this.markMiss(x, y);
+          } else {
+            const cell = this.selfGrid[y][x];
+            cell.hit = false;
+            cell.attacked = true;
+          }
+        }
 
         const startY = isEnemy ? this.enemyStartY : this.enemyStartY + this.cellSize * this.ROWS + 20;
 
@@ -540,8 +541,8 @@ if (hit) {
             pending--;
 
             if (pending === 0 && !soundPlayed) {
-              if (attackerId === socket.id) {
-                if (attackerId === socket.id) {
+              if (attackerId === SessionManager.userId) {
+                if (attackerId === SessionManager.userId) {
                   const ship = this.shipsUI[this.lastUsedShipIndex];
 
                   if (ship && ship.cooldown > 0) {
@@ -554,9 +555,9 @@ if (hit) {
               }
               soundPlayed = true;
               if (isAnyHit) {
-                this.sfx.explosion.play({ volume: attackerId === socket.id ? 0.6 : 0.4 });
+                this.sfx.explosion.play({ volume: attackerId === SessionManager.userId ? 0.6 : 0.4 });
               } else {
-                this.sfx.waterboom.play({ volume: attackerId === socket.id ? 0.9 : 0.5 });
+                this.sfx.waterboom.play({ volume: attackerId === SessionManager.userId ? 0.9 : 0.5 });
               }
               this.isAnimating = false;
 
@@ -902,7 +903,7 @@ if (hit) {
 
     this.time.removeAllEvents();
 
-    const myScore = scores[socket.id] || {
+    const myScore = scores[SessionManager.userId]|| {
       totalAttack: 0,
       hitCount: 0,
       missCount: 0,
@@ -912,7 +913,7 @@ if (hit) {
 
     const resultData = {
       winner: winner,
-      myId: socket.id,
+      myId: SessionManager.userId,
       total: myScore.totalAttack,
       hit: myScore.hitCount,
       miss: myScore.missCount,
@@ -925,6 +926,5 @@ if (hit) {
     this.scene.start("Result", resultData);
   }
 }
-
 
 // bismillah
