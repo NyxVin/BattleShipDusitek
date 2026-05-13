@@ -1,0 +1,30 @@
+{
+  "code": "SU-3954",
+  "host": "061XwaSNeKzdGClrAAAD",
+  "guest": "4RcF-Ysn-BFkkroJAAAB",
+  "playersReady": 1,
+  "ships": {
+    "061XwaSNeKzdGClrAAAD": [
+      { "x": 1, "y": 4, "width": 1, "height": 1, "vertical": true, "key": "spaceship1" },
+      { "x": 5, "y": 1, "width": 2, "height": 2, "vertical": false, "key": "spaceship2" },
+      { "x": 2, "y": 0, "width": 2, "height": 1, "vertical": true, "key": "spaceship3" },
+      { "x": 4, "y": 2, "width": 1, "height": 3, "vertical": false, "key": "spaceship4" }
+    ],
+    "4RcF-Ysn-BFkkroJAAAB": [
+      { "x": 7, "y": 4, "width": 1, "height": 1, "vertical": true, "key": "spaceship1" },
+      { "x": 3, "y": 4, "width": 2, "height": 2, "vertical": false, "key": "spaceship2" },
+      { "x": 1, "y": 2, "width": 2, "height": 1, "vertical": false, "key": "spaceship3" },
+      { "x": 3, "y": 2, "width": 1, "height": 3, "vertical": true, "key": "spaceship4" }
+    ]
+  },
+  "hits": {},
+  "scores": {},
+  "currentTurn": "061XwaSNeKzdGClrAAAD",
+  "hasAttacked": false,
+  "timeLeft": 6,
+  "createdAt": 1778043497032,
+  "disconnectPlayer": null,
+  "phase": "battle",
+  "placementTimeLeft": 0,
+  "readyPlayers": ["4RcF-Ysn-BFkkroJAAAB"]
+}

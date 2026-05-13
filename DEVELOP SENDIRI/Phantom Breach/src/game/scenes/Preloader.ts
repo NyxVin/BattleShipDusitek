@@ -93,7 +93,59 @@ export class Preloader extends Scene {
     this.load.audio("waterboom", cfg.schema.assets.audio.miss || "assets/sound/waterboom.mp3");
   }
 
-  create() {
+create() {
+  const pendingLateGameResult = this.registry.get("pendingLateGameResult");
+
+  if (pendingLateGameResult) {
+    console.log("🏁 PRELOADER LANJUT LATE RESULT:", pendingLateGameResult);
+
+    this.registry.remove("pendingLateGameResult");
+
+    if (pendingLateGameResult.roomCode) {
+      this.registry.set("roomCode", pendingLateGameResult.roomCode);
+    }
+
+    this.scene.start("Result", pendingLateGameResult);
+    return;
+  }
+
+  const pendingReconnect = this.registry.get("pendingReconnect");
+
+  if (pendingReconnect) {
+      console.log("✅ PRELOADER LANJUT RECONNECT:", pendingReconnect);
+
+      this.registry.remove("pendingReconnect");
+
+      const room = pendingReconnect.room;
+      const roomCode = pendingReconnect.roomCode;
+
+      if (room && roomCode && room.phase === "battle") {
+        this.registry.set("roomCode", roomCode);
+
+        this.scene.start("MainGame", {
+          roomCode,
+          ships: room.ships,
+          room,
+          reconnect: true,
+        });
+
+        return;
+      }
+
+      if (room && roomCode && room.phase !== "battle") {
+        this.registry.set("roomCode", roomCode);
+
+        this.scene.start("Placement", {
+          roomCode,
+          timeLeft: room.placementTimeLeft,
+          room,
+          reconnect: true,
+        });
+
+        return;
+      }
+    }
+
     this.scene.start("MainMenu");
   }
 }

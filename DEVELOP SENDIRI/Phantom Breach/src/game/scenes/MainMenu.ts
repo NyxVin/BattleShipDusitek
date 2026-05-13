@@ -731,5 +731,143 @@ friendButton.on("pointerdown", () => {
         yoyo: true,
       });
     });
+
+    const matchExpiredNotice = this.registry.get("matchExpiredNotice");
+
+    if (matchExpiredNotice) {
+      this.time.delayedCall(250, () => {
+        this.showMatchExpiredModal(matchExpiredNotice);
+      });
+    }
   }
+
+  private showMatchExpiredModal(data: any) {
+    const { width, height } = this.scale;
+
+    const overlay = this.add.rectangle(
+      width / 2,
+      height / 2,
+      width,
+      height,
+      0x000000,
+      0.65
+    );
+    overlay.setDepth(9998);
+
+    const modal = this.add.container(width / 2, height / 2);
+    modal.setDepth(9999);
+
+    const card = this.add.graphics();
+
+    card.fillStyle(0x123c69, 1);
+    card.fillRoundedRect(-150, -170, 300, 340, 24);
+
+    card.lineStyle(4, 0xffc700, 1);
+    card.strokeRoundedRect(-150, -170, 300, 340, 24);
+
+    const icon = this.add
+      .text(0, -115, "⚓", {
+        fontSize: "58px",
+      })
+      .setOrigin(0.5);
+
+    const title = this.add
+      .text(0, -55, data?.title || "MATCH EXPIRED", {
+        fontFamily: "Lilita One",
+        fontSize: "30px",
+        color: "#FFC700",
+        stroke: "#000000",
+        strokeThickness: 3,
+        align: "center",
+      })
+      .setOrigin(0.5);
+
+    const message = this.add
+      .text(
+        0,
+        10,
+        data?.message ||
+          "Kedua pemain terputus terlalu lama.\nMatch ini dianggap tidak valid.",
+        {
+          fontFamily: "Poppins",
+          fontSize: "14px",
+          color: "#FFFFFF",
+          align: "center",
+          lineSpacing: 8,
+          wordWrap: { width: 245 },
+        }
+      )
+      .setOrigin(0.5);
+
+    const subMessage = this.add
+      .text(0, 80, data?.subMessage || "Skor tidak dikirim.", {
+        fontFamily: "Poppins",
+        fontSize: "13px",
+        color: "#BFD7FF",
+        align: "center",
+      })
+      .setOrigin(0.5);
+
+    const buttonBg = this.add.graphics();
+    buttonBg.fillStyle(0xffc700, 1);
+    buttonBg.fillRoundedRect(-105, 115, 210, 48, 16);
+
+    const buttonText = this.add
+      .text(0, 139, "KEMBALI KE MENU", {
+        fontFamily: "Lilita One",
+        fontSize: "17px",
+        color: "#123C69",
+      })
+      .setOrigin(0.5);
+
+    const hitArea = this.add.rectangle(0, 139, 210, 48, 0xffffff, 0);
+    hitArea.setInteractive({ useHandCursor: true });
+
+    hitArea.on("pointerover", () => {
+      modal.setScale(1.03);
+    });
+
+    hitArea.on("pointerout", () => {
+      modal.setScale(1);
+    });
+
+    hitArea.on("pointerdown", () => {
+      overlay.destroy();
+      modal.destroy();
+
+      this.registry.remove("matchExpiredNotice");
+    });
+
+    modal.add([
+      card,
+      icon,
+      title,
+      message,
+      subMessage,
+      buttonBg,
+      buttonText,
+      hitArea,
+    ]);
+
+    modal.setScale(0.75);
+    modal.setAlpha(0);
+
+    this.tweens.add({
+      targets: modal,
+      scale: 1,
+      alpha: 1,
+      duration: 280,
+      ease: "Back.Out",
+    });
+
+    this.tweens.add({
+      targets: icon,
+      y: icon.y - 8,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
 }

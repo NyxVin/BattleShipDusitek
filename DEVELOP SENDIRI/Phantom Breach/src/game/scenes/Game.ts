@@ -55,6 +55,7 @@ export class Game extends Scene {
 
   init(data: any) {
     this.roomCode = data.roomCode;
+    this.registry.set("roomCode", data.roomCode);
     this.gameData = data; // simpan dulu
   }
 
@@ -379,12 +380,18 @@ export class Game extends Scene {
 
       this.attack(); // 🔥 PINDAH KE SINI
     });
-    socket.off("game_tick");
+        socket.off("game_tick");
     socket.off("attackResult");
+    socket.off("attackInvalid");
     socket.off("gameOver");
     socket.off("updateScore");
 
-    let lastTurn = "";
+    let lastTurn =
+      this.gameData?.room?.currentTurn ||
+      this.gameData?.currentTurn ||
+      "";
+
+    let firstTickAfterSceneStart = true;
 
     socket.on("game_tick", (data) => {
       if (!this.timerText || !this.timerText.active) return;
@@ -396,6 +403,13 @@ export class Game extends Scene {
 
       this.isMyTurn = data.currentTurn === SessionManager.userId;
       this.turnTime = data.timeLeft;
+
+      // Tick pertama hanya untuk sync UI.
+      // Jangan munculkan popup giliran dulu.
+      if (firstTickAfterSceneStart) {
+        firstTickAfterSceneStart = false;
+        return;
+      }
 
       if (prevTurn !== data.currentTurn) {
         // 🔥 HANYA SAAT GILIRAN KAMU

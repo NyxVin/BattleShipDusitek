@@ -39,16 +39,21 @@ export class Result extends Phaser.Scene {
 
     const isWin = data.winner === data.myId;
     setTimeout(() => {
-  submitScore({
-  score: data.score,
-  result: isWin ? "WIN" : "LOSE",
+      submitScore({
+        roomCode: this.registry.get("roomCode"),
 
-  totalAttack: data.total,
-  hitCount: data.hit,
-  missCount: data.miss,
-  accuracy: data.accuracy,
-  });
-}, 100);
+        score: data.score,
+
+        result: {
+          match_result: isWin ? "win" : "lose",
+        },
+
+        totalAttack: data.total,
+        hitCount: data.hit,
+        missCount: data.miss,
+        accuracy: data.accuracy,
+      });
+    }, 100);
     if (this.sound.get("winner")) this.sound.stopByKey("winner");
     if (this.sound.get("lose")) this.sound.stopByKey("lose");
 

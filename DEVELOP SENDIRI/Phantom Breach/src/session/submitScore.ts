@@ -28,6 +28,7 @@ export async function submitScore(data: any) {
         session_token: SessionManager.sessionToken,
         score: data.score,
         result: data.result,
+        room_code: data.roomCode,
       }
     );
 

@@ -42,3 +42,23 @@ socket.on("reconnect", () => {
 socket.on("disconnect", (reason) => {
   console.log("❌ SOCKET DISCONNECT:", reason);
 });
+
+socket.on("matchExpired", (data) => {
+  console.log("⚠️ MATCH EXPIRED:", data);
+
+  window.dispatchEvent(
+    new CustomEvent("matchExpired", {
+      detail: data,
+    })
+  );
+});
+
+socket.on("lateGameResult", (data) => {
+  console.log("🏁 LATE GAME RESULT:", data);
+
+  window.dispatchEvent(
+    new CustomEvent("lateGameResult", {
+      detail: data,
+    })
+  );
+});

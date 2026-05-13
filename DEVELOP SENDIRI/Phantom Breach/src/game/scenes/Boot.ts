@@ -52,6 +52,43 @@ export class Boot extends Scene {
       game_id: params.get("game_id"),
     });
 
+socket.off("reconnectSuccess");
+
+socket.on("reconnectSuccess", (data: any) => {
+  console.log("✅ RECONNECT SUCCESS CLIENT:", data);
+
+  // Jangan langsung buka MainGame dari Boot.
+  // Simpan dulu, nanti Preloader yang buka setelah asset selesai diload.
+  this.registry.set("pendingReconnect", data);
+});
+
+if (!this.registry.get("lateGameResultListenerReady")) {
+  this.registry.set("lateGameResultListenerReady", true);
+
+  window.addEventListener("lateGameResult", (event: any) => {
+    console.log("🏁 LATE GAME RESULT UI:", event.detail);
+
+    const resultData = event.detail;
+
+    this.registry.remove("pendingReconnect");
+    this.registry.remove("matchExpiredNotice");
+
+    if (resultData.roomCode) {
+      this.registry.set("roomCode", resultData.roomCode);
+    }
+
+    this.game.scene.stop("MainGame");
+    this.game.scene.stop("Placement");
+    this.game.scene.stop("MainMenu");
+    this.game.scene.stop("Result");
+
+    // Jangan langsung Result dari Boot.
+    // Lewat Preloader dulu supaya asset Result aman.
+    this.registry.set("pendingLateGameResult", resultData);
+    this.game.scene.start("Preloader");
+  });
+}
+
     socket.connect();
 
 
