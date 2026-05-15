@@ -27,17 +27,18 @@ export async function submitScore(data: any) {
 
   try {
 
-    const res = await axios.post(
+const res = await axios.post(
       `${SessionManager.apiBaseUrl}/game-sessions/submit-score`,
       {
         session_id: SessionManager.sessionId,
         session_token: SessionManager.sessionToken,
         score: data.score,
-        result: data.result,
-        room_code: data.roomCode,
+        metadata: {
+          result: data.result,
+          room_code: data.roomCode,
+        },
       }
     );
-
     console.log("🔥 SUBMIT BERHASIL:", res.data);
 
   } catch (err) {

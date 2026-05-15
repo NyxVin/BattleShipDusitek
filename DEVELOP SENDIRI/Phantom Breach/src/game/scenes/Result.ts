@@ -43,10 +43,8 @@ export class Result extends Phaser.Scene {
         roomCode: this.registry.get("roomCode"),
 
         score: data.score,
+        result: isWin ? "win" : "loss",
 
-        result: {
-          match_result: isWin ? "win" : "lose",
-        },
 
         totalAttack: data.total,
         hitCount: data.hit,
@@ -72,7 +70,7 @@ export class Result extends Phaser.Scene {
     }
 
     this.add
-      .text(width / 2, 180, isWin ? cfg.schema.ui.result.win_text : cfg.schema.ui.result.lose_text, {
+      .text(width / 2, 180, isWin ? cfg.result_win_text : cfg.result_lose_text, {
         fontFamily: "Lilita One",
         fontSize: "44px",
         color: isWin ? "#FFC700" : "#FFFFFF",
@@ -82,7 +80,7 @@ export class Result extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 220, isWin ? cfg.schema.ui.result.win_desc : cfg.schema.ui.result.lose_desc, {
+      .text(width / 2, 220, isWin ? cfg.result_win_desc : cfg.result_lose_desc, {
         fontFamily: "poppins",
         fontStyle: "bold",
         fontSize: "12px",

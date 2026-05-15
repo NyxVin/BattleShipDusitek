@@ -36,7 +36,7 @@ export class Boot extends Scene {
     this.registry.set("gameConfig", finalConfig);
 
     // 🔥 5. KIRIM KE SERVER
-    socket.emit("syncConfig", finalConfig.schema);
+    socket.emit("syncConfig", finalConfig);
 
     // 🔥 SESSION DATA DARI PORTAL
     const params = new URLSearchParams(window.location.search);
@@ -46,10 +46,6 @@ export class Boot extends Scene {
       session_token: params.get("session_token"),
       api_base_url: params.get("api_base_url"),
       expires_at: params.get("expires_at"),
-      user_id: params.get("user_id"),
-      username: params.get("username"),
-      event_id: params.get("event_id"),
-      game_id: params.get("game_id"),
     });
 
 socket.off("reconnectSuccess");
@@ -73,6 +69,35 @@ if (!this.registry.get("matchExpiredListenerReady")) {
       message: "Kedua pemain terputus terlalu lama.\nMatch ini dianggap tidak valid.",
       subMessage: "Skor tidak dikirim.",
       reason: event.detail?.reason || "BOTH_PLAYERS_DISCONNECTED",
+    });
+
+    this.registry.remove("pendingReconnect");
+    this.registry.remove("pendingLateGameResult");
+    this.registry.remove("roomCode");
+
+    this.game.scene.stop("MainGame");
+    this.game.scene.stop("Placement");
+    this.game.scene.stop("Result");
+
+    this.game.scene.start("MainMenu");
+  });
+}
+
+if (!this.registry.get("matchEndedListenerReady")) {
+  this.registry.set("matchEndedListenerReady", true);
+
+  window.addEventListener("matchEnded", (event: any) => {
+    console.log("🏁 MATCH ENDED UI:", event.detail);
+
+    this.registry.set("matchExpiredNotice", {
+      title: event.detail?.title || "SESI GAME BERAKHIR",
+      message:
+        event.detail?.message ||
+        "Sesi game telah berakhir.",
+      subMessage:
+        event.detail?.subMessage ||
+        "Silakan kembali ke menu utama.",
+      reason: event.detail?.reason || "MATCH_ENDED",
     });
 
     this.registry.remove("pendingReconnect");

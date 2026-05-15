@@ -153,6 +153,8 @@ async function forceStartBattle(roomCode) {
   io.to(roomCode).emit("startGame", {
     roomCode,
     ships: room.ships,
+    currentTurn: room.currentTurn,
+    timeLeft: room.timeLeft,
   });
 
   io.to(roomCode).emit("game_tick", {
@@ -164,7 +166,6 @@ async function forceStartBattle(roomCode) {
 
   console.log("🔥 BATTLE DIMULAI:", roomCode);
 }
-
 
 // =====================================================
 // BATTLE GAME LOOP
@@ -195,7 +196,6 @@ async function startGameLoop(roomCode) {
     }
 
     await saveRoom(roomCode, room);
-
 
     io.to(roomCode).emit("game_tick", {
       timeLeft: room.timeLeft,
@@ -321,19 +321,115 @@ function buildScore(room, playerId, isWinner = false) {
   };
 }
 
+function getTtlUntilExpiresAt(expiresAt) {
+  if (!expiresAt) return 300;
+
+  const expiredTime = new Date(expiresAt).getTime();
+
+  if (Number.isNaN(expiredTime)) return 300;
+
+  const ttl = Math.floor((expiredTime - Date.now()) / 1000);
+
+  return ttl > 0 ? ttl : 0;
+}
+
+function isSessionExpired(expiresAt) {
+  if (!expiresAt) return false;
+
+  const expiredTime = new Date(expiresAt).getTime();
+
+  if (Number.isNaN(expiredTime)) return false;
+
+  return Date.now() > expiredTime;
+}
+
+function buildSessionFromUser(user) {
+  if (!user) return null;
+
+  return {
+    sessionId: user.sessionId,
+    sessionToken: user.sessionToken,
+    apiBaseUrl: user.apiBaseUrl,
+    expiresAt: user.expiresAt,
+  };
+}
+
+function getPlayerSession(room, sessionId) {
+  if (room.sessions?.[sessionId]) {
+    return room.sessions[sessionId];
+  }
+
+  const socketField = getPlayerSocketField(room, sessionId);
+  const socketId = socketField ? room[socketField] : null;
+
+  if (!socketId) return null;
+
+  return buildSessionFromUser(connectedUsers[socketId]);
+}
+
+async function submitScoreFromServer(playerSession, scoreData, roomCode) {
+  if (!playerSession) return false;
+
+  if (!playerSession.apiBaseUrl) {
+    console.log("❌ SERVER SUBMIT GAGAL: API BASE URL TIDAK ADA");
+    return false;
+  }
+
+  if (!playerSession.sessionId || !playerSession.sessionToken) {
+    console.log("❌ SERVER SUBMIT GAGAL: SESSION TIDAK LENGKAP");
+    return false;
+  }
+
+  if (isSessionExpired(playerSession.expiresAt)) {
+    console.log("❌ SERVER SUBMIT GAGAL: SESSION EXPIRED");
+    return false;
+  }
+
+  try {
+    const response = await fetch(`${playerSession.apiBaseUrl}/game-sessions/submit-score`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        session_id: playerSession.sessionId,
+        session_token: playerSession.sessionToken,
+        score: scoreData.score,
+        metadata: {
+          result: scoreData.result,
+          room_code: roomCode,
+        },
+      }),
+    });
+
+    const result = await response.json();
+
+    console.log("✅ SERVER SUBMIT SCORE BERHASIL:", {
+      sessionId: playerSession.sessionId,
+      result: scoreData.matchResult,
+      score: scoreData.score,
+      response: result,
+    });
+
+    return true;
+  } catch (err) {
+    console.error("❌ SERVER SUBMIT SCORE ERROR:", err);
+    return false;
+  }
+}
 // =====================================================
 // DISCONNECT / RECONNECT HELPER
 // =====================================================
 // Helper di bagian ini digunakan untuk mendukung reconnect dan disconnect.
 // Fungsinya antara lain mencari lawan player, mencari field socket player,
 // memastikan struktur disconnectedPlayers tersedia, dan membersihkan timer reconnect.
-function getOpponentId(room, userId) {
-  return room.host === userId ? room.guest : room.host;
+function getOpponentId(room, sessionId) {
+  return room.host === sessionId ? room.guest : room.host;
 }
 
-function getPlayerSocketField(room, userId) {
-  if (room.host === userId) return "hostSocket";
-  if (room.guest === userId) return "guestSocket";
+function getPlayerSocketField(room, sessionId) {
+  if (room.host === sessionId) return "hostSocket";
+  if (room.guest === sessionId) return "guestSocket";
   return null;
 }
 
@@ -353,16 +449,16 @@ function ensureDisconnectState(room) {
   return room;
 }
 
-function isPlayerDisconnected(room, userId) {
-  return !!room.disconnectedPlayers?.[userId];
+function isPlayerDisconnected(room, sessionId) {
+  return !!room.disconnectedPlayers?.[sessionId];
 }
 
 function getDisconnectedCount(room) {
   return Object.keys(room.disconnectedPlayers || {}).length;
 }
 
-function clearPlayerDisconnectTimer(roomCode, userId) {
-  const key = `${roomCode}:${userId}`;
+function clearPlayerDisconnectTimer(roomCode, sessionId) {
+  const key = `${roomCode}:${sessionId}`;
 
   if (disconnectTimers[key]) {
     clearTimeout(disconnectTimers[key]);
@@ -384,13 +480,20 @@ function clearBothOfflineTimer(roomCode) {
 // Jika player tersebut membuka game lagi sebelum TTL Redis habis,
 // server akan mengirim event lateGameResult agar dia masuk halaman Result kalah.
 async function saveLateResultForPlayer(room, playerId, resultData) {
+  const playerSession = getPlayerSession(room, playerId);
+  const ttl = getTtlUntilExpiresAt(playerSession?.expiresAt);
+
+  if (ttl <= 0) {
+    return;
+  }
+
   await pubClient.setEx(
     `matchResult:${playerId}`,
-    300, // 5 menit
+    ttl,
     JSON.stringify({
       roomCode: room.code,
       ...resultData,
-    })
+    }),
   );
 }
 
@@ -409,19 +512,21 @@ async function saveExpiredMatchForPlayers(room, reason) {
   };
 
   if (room.host) {
-    await pubClient.setEx(
-      `matchExpired:${room.host}`,
-      300,
-      JSON.stringify(payload)
-    );
+    const hostSession = getPlayerSession(room, room.host);
+    const hostTtl = getTtlUntilExpiresAt(hostSession?.expiresAt);
+
+    if (hostTtl > 0) {
+      await pubClient.setEx(`matchExpired:${room.host}`, hostTtl, JSON.stringify(payload));
+    }
   }
 
   if (room.guest) {
-    await pubClient.setEx(
-      `matchExpired:${room.guest}`,
-      300,
-      JSON.stringify(payload)
-    );
+    const guestSession = getPlayerSession(room, room.guest);
+    const guestTtl = getTtlUntilExpiresAt(guestSession?.expiresAt);
+
+    if (guestTtl > 0) {
+      await pubClient.setEx(`matchExpired:${room.guest}`, guestTtl, JSON.stringify(payload));
+    }
   }
 }
 
@@ -446,7 +551,7 @@ async function finishByForfeit(roomCode, loserId) {
   const winnerId = getOpponentId(room, loserId);
   if (!winnerId) return;
 
-    room.status = "FINISHED";
+  room.status = "FINISHED";
   room.winner = winnerId;
   room.finishReason = "DISCONNECT_TIMEOUT";
 
@@ -468,6 +573,25 @@ async function finishByForfeit(roomCode, loserId) {
     score: loserScore.score,
     reason: "DISCONNECT_TIMEOUT",
   });
+
+  await Promise.allSettled([
+    submitScoreFromServer(
+      getPlayerSession(room, winnerId),
+      {
+        score: winnerScore.score,
+        result: "win",
+      },
+      roomCode,
+    ),
+    submitScoreFromServer(
+      getPlayerSession(room, loserId),
+      {
+        score: loserScore.score,
+        result: "loss",
+      },
+      roomCode,
+    ),
+  ]);
 
   io.to(roomCode).emit("gameOver", {
     winner: winnerId,
@@ -535,10 +659,10 @@ async function abandonMatch(roomCode) {
 // Timer ini aktif ketika hanya satu player disconnect.
 // Jika player tidak reconnect sebelum PLAYER_RECONNECT_TIMEOUT,
 // maka player tersebut kalah by forfeit.
-function startPlayerDisconnectTimer(roomCode, userId) {
-  const key = `${roomCode}:${userId}`;
+function startPlayerDisconnectTimer(roomCode, sessionId) {
+  const key = `${roomCode}:${sessionId}`;
 
-  clearPlayerDisconnectTimer(roomCode, userId);
+  clearPlayerDisconnectTimer(roomCode, sessionId);
 
   disconnectTimers[key] = setTimeout(async () => {
     let room = await getRoom(roomCode);
@@ -559,8 +683,8 @@ function startPlayerDisconnectTimer(roomCode, userId) {
     }
 
     // Kalau player ini masih offline sampai timeout, dia kalah.
-    if (isPlayerDisconnected(room, userId)) {
-      await finishByForfeit(roomCode, userId);
+    if (isPlayerDisconnected(room, sessionId)) {
+      await finishByForfeit(roomCode, sessionId);
     }
   }, PLAYER_RECONNECT_TIMEOUT);
 }
@@ -636,23 +760,26 @@ app.post("/game-sessions/end", (req, res) => {
 io.on("connection", async (socket) => {
   console.log("USER CONNECT:", socket.id);
 
-    // =====================================================
+  // =====================================================
   // AUTH PLAYER
   // =====================================================
   // Client mengirim data session setelah socket connect.
   // Server menyimpan data user berdasarkan socket.id agar event berikutnya
   // dapat dikenali sebagai milik player tertentu.
   socket.on("auth", async (data) => {
-    if (!data.userId || !data.sessionToken) {
+    if (!data.sessionId || !data.sessionToken) {
       console.log("❌ AUTH INVALID");
 
       return;
     }
+
     connectedUsers[socket.id] = {
-      userId: data.userId,
+      sessionId: data.sessionId,
       username: data.username,
       sessionToken: data.sessionToken,
       sessionId: data.sessionId,
+      apiBaseUrl: data.apiBaseUrl,
+      expiresAt: data.expiresAt,
       eventId: data.eventId,
       gameId: data.gameId,
     };
@@ -663,108 +790,108 @@ io.on("connection", async (socket) => {
 
     console.log(connectedUsers[socket.id]);
 
-   // =========================
-// RECONNECT CHECK
-// =========================
-console.log("🔥 AUTH MASUK:");
-console.log(data);
+    // =========================
+    // RECONNECT CHECK
+    // =========================
+    console.log("🔥 AUTH MASUK:");
+    console.log(data);
 
-// Mengecek apakah player ini sebelumnya kalah karena disconnect timeout.
-// Jika ada data matchResult, server mengirim lateGameResult agar client masuk Result kalah.
-const lateResultData = await pubClient.get(`matchResult:${data.userId}`);
+    // Mengecek apakah player ini sebelumnya kalah karena disconnect timeout.
+    // Jika ada data matchResult, server mengirim lateGameResult agar client masuk Result kalah.
+    const lateResultData = await pubClient.get(`matchResult:${data.sessionId}`);
 
-if (lateResultData) {
-  const lateResult = JSON.parse(lateResultData);
+    if (lateResultData) {
+      const lateResult = JSON.parse(lateResultData);
 
-  socket.emit("lateGameResult", lateResult);
+      socket.emit("lateGameResult", lateResult);
 
-  await pubClient.del(`matchResult:${data.userId}`);
+      await pubClient.del(`matchResult:${data.sessionId}`);
 
-  return;
-}
-
-// Mengecek apakah match sebelumnya expired karena dua player sama-sama disconnect.
-// Jika ada data matchExpired, client diarahkan ke MainMenu dengan notifikasi match expired.
-const expiredData = await pubClient.get(`matchExpired:${data.userId}`);
-
-if (expiredData) {
-  const expiredMatch = JSON.parse(expiredData);
-
-  socket.emit("matchExpired", expiredMatch);
-
-  await pubClient.del(`matchExpired:${data.userId}`);
-
-  return;
-}
-
-// Jika tidak ada late result atau expired match,
-// server mengecek apakah player ini sedang reconnect ke room aktif.
-for (const code in rooms) {
-  let room = await getRoom(code);
-  if (!room) continue;
-
-  room = ensureDisconnectState(room);
-
-  const disconnectedData = room.disconnectedPlayers[data.userId];
-
-  if (!disconnectedData) {
-    continue;
-  }
-
-  console.log("✅ RECONNECT BERHASIL:", code, data.userId);
-
-  socket.join(code);
-
-  const socketField = getPlayerSocketField(room, data.userId);
-
-  if (socketField) {
-    room[socketField] = socket.id;
-  }
-
-  delete room.disconnectedPlayers[data.userId];
-
-  clearPlayerDisconnectTimer(code, data.userId);
-
-  const disconnectedCount = getDisconnectedCount(room);
-
-  if (disconnectedCount === 0) {
-    // Semua player sudah online lagi
-    clearBothOfflineTimer(code);
-    room.status = "IN_PROGRESS";
-    room.bothOfflineAt = null;
-  } else {
-    // Player ini reconnect, tapi lawan masih offline
-    room.status = "ONE_OFFLINE";
-
-    clearBothOfflineTimer(code);
-
-    const opponentId = getOpponentId(room, data.userId);
-
-    // Yang reconnect duluan belum langsung menang.
-    // Lawannya dikasih timeout normal.
-    if (opponentId && isPlayerDisconnected(room, opponentId)) {
-      startPlayerDisconnectTimer(code, opponentId);
+      return;
     }
-  }
 
-  rooms[code] = room;
-  await saveRoom(code, room);
+    // Mengecek apakah match sebelumnya expired karena dua player sama-sama disconnect.
+    // Jika ada data matchExpired, client diarahkan ke MainMenu dengan notifikasi match expired.
+    const expiredData = await pubClient.get(`matchExpired:${data.sessionId}`);
 
-  socket.emit("reconnectSuccess", {
-    roomCode: code,
-    room,
+    if (expiredData) {
+      const expiredMatch = JSON.parse(expiredData);
+
+      socket.emit("matchExpired", expiredMatch);
+
+      await pubClient.del(`matchExpired:${data.sessionId}`);
+
+      return;
+    }
+
+    // Jika tidak ada late result atau expired match,
+    // server mengecek apakah player ini sedang reconnect ke room aktif.
+    for (const code in rooms) {
+      let room = await getRoom(code);
+      if (!room) continue;
+
+      room = ensureDisconnectState(room);
+
+      const disconnectedData = room.disconnectedPlayers[data.sessionId];
+
+      if (!disconnectedData) {
+        continue;
+      }
+
+      console.log("✅ RECONNECT BERHASIL:", code, data.sessionId);
+
+      socket.join(code);
+
+      const socketField = getPlayerSocketField(room, data.sessionId);
+
+      if (socketField) {
+        room[socketField] = socket.id;
+      }
+
+      delete room.disconnectedPlayers[data.sessionId];
+
+      clearPlayerDisconnectTimer(code, data.sessionId);
+
+      const disconnectedCount = getDisconnectedCount(room);
+
+      if (disconnectedCount === 0) {
+        // Semua player sudah online lagi
+        clearBothOfflineTimer(code);
+        room.status = "IN_PROGRESS";
+        room.bothOfflineAt = null;
+      } else {
+        // Player ini reconnect, tapi lawan masih offline
+        room.status = "ONE_OFFLINE";
+
+        clearBothOfflineTimer(code);
+
+        const opponentId = getOpponentId(room, data.sessionId);
+
+        // Yang reconnect duluan belum langsung menang.
+        // Lawannya dikasih timeout normal.
+        if (opponentId && isPlayerDisconnected(room, opponentId)) {
+          startPlayerDisconnectTimer(code, opponentId);
+        }
+      }
+
+      rooms[code] = room;
+      await saveRoom(code, room);
+
+      socket.emit("reconnectSuccess", {
+        roomCode: code,
+        room,
+      });
+
+      io.to(code).emit("playerReconnected", {
+        player: data.sessionId,
+        status: room.status,
+      });
+
+      break;
+    }
   });
 
-  io.to(code).emit("playerReconnected", {
-    player: data.userId,
-    status: room.status,
-  });
-
-  break;
-}
-  });
-
-    // =====================================================
+  // =====================================================
   // CREATE ROOM
   // =====================================================
   // Membuat room private menggunakan kode room.
@@ -785,7 +912,7 @@ for (const code in rooms) {
 
     const newRoom = {
       code,
-      host: connectedUsers[socket.id].userId,
+      host: connectedUsers[socket.id].sessionId,
       guest: null,
       hostSocket: socket.id,
       guestSocket: null,
@@ -809,7 +936,7 @@ for (const code in rooms) {
     socket.emit("roomCreated", code);
   });
 
-    // =====================================================
+  // =====================================================
   // JOIN ROOM
   // =====================================================
   // Guest masuk ke room private menggunakan kode room.
@@ -827,7 +954,7 @@ for (const code in rooms) {
       return;
     }
 
-    room.guest = connectedUsers[socket.id].userId;
+    room.guest = connectedUsers[socket.id].sessionId;
     room.guestSocket = socket.id;
     await saveRoom(code, room);
     rooms[code] = room; // biar logic lama tetap jalan
@@ -846,7 +973,7 @@ for (const code in rooms) {
     }, 500);
   });
 
-    // =====================================================
+  // =====================================================
   // FIND MATCH / RANDOM MATCHMAKING
   // =====================================================
   // Player masuk ke queue matchmaking.
@@ -875,7 +1002,7 @@ for (const code in rooms) {
     tryMatch();
   });
 
-    // =====================================================
+  // =====================================================
   // TRY MATCH
   // =====================================================
   // Mengambil dua player dari matchmakingQueue dan memasangkannya ke room baru.
@@ -898,8 +1025,8 @@ for (const code in rooms) {
 
       rooms[code] = {
         code,
-        host: connectedUsers[p1.id].userId,
-        guest: connectedUsers[p2.id].userId,
+        host: connectedUsers[p1.id].sessionId,
+        guest: connectedUsers[p2.id].sessionId,
 
         hostSocket: p1.id,
         guestSocket: p2.id,
@@ -935,7 +1062,7 @@ for (const code in rooms) {
     }
   }
 
-    // =====================================================
+  // =====================================================
   // CANCEL MATCH
   // =====================================================
   // Menghapus player dari queue matchmaking dan mengeluarkannya dari room sementara.
@@ -955,7 +1082,7 @@ for (const code in rooms) {
     console.log("❌ CANCEL MATCH:", socket.id);
   });
 
-    // =====================================================
+  // =====================================================
   // PLAYER READY / SAVE SHIPS
   // =====================================================
   // Client mengirim posisi kapal setelah fase placement.
@@ -976,13 +1103,13 @@ for (const code in rooms) {
       }
     }
 
-    const userId = connectedUsers[socket.id].userId;
+    const sessionId = connectedUsers[socket.id].sessionId;
 
-    room.ships[userId] = ships;
+    room.ships[sessionId] = ships;
     if (!room.readyPlayers) room.readyPlayers = [];
 
-    if (!room.readyPlayers.includes(userId)) {
-      room.readyPlayers.push(userId);
+    if (!room.readyPlayers.includes(sessionId)) {
+      room.readyPlayers.push(sessionId);
       room.playersReady++;
     }
 
@@ -1000,7 +1127,7 @@ for (const code in rooms) {
     await saveRoom(roomCode, room);
   });
 
-    // =====================================================
+  // =====================================================
   // ATTACK HANDLER
   // =====================================================
   // Server memproses serangan player secara authoritative.
@@ -1017,7 +1144,7 @@ for (const code in rooms) {
 
     await saveRoom(roomCode, room);
     try {
-      const player = connectedUsers[socket.id].userId;
+      const player = connectedUsers[socket.id].sessionId;
       if (room.currentTurn !== player) {
         room.hasAttacked = false;
         return;
@@ -1243,82 +1370,86 @@ for (const code in rooms) {
   });
 
   // =====================================================
-// DISCONNECT HANDLER
-// =====================================================
-// Handler ini menangani player yang putus koneksi.
-// Jika hanya satu player disconnect, server memberi waktu reconnect.
-// Jika dua player disconnect, server menunggu lebih lama sebelum match abandoned.
-socket.on("disconnect", async () => {
-  console.log("❌ DISCONNECT:", socket.id);
+  // DISCONNECT HANDLER
+  // =====================================================
+  // Handler ini menangani player yang putus koneksi.
+  // Jika hanya satu player disconnect, server memberi waktu reconnect.
+  // Jika dua player disconnect, server menunggu lebih lama sebelum match abandoned.
+  socket.on("disconnect", async () => {
+    console.log("❌ DISCONNECT:", socket.id);
 
-  playersInQueue.delete(socket.id);
+    playersInQueue.delete(socket.id);
 
-  const index = matchmakingQueue.findIndex((s) => s.id === socket.id);
-  if (index !== -1) {
-    matchmakingQueue.splice(index, 1);
-  }
-
-  const user = connectedUsers[socket.id];
-
-  if (!user) {
-    return;
-  }
-
-  const userId = user.userId;
-
-  for (const code in rooms) {
-    let room = await getRoom(code);
-    if (!room) continue;
-
-    room = ensureDisconnectState(room);
-
-    if (room.host !== userId && room.guest !== userId) {
-      continue;
+    const index = matchmakingQueue.findIndex((s) => s.id === socket.id);
+    if (index !== -1) {
+      matchmakingQueue.splice(index, 1);
     }
 
-    if (room.status === "FINISHED" || room.status === "ABANDONED") {
-      continue;
+    const user = connectedUsers[socket.id];
+
+    if (!user) {
+      return;
     }
 
-    room.disconnectedPlayers[userId] = {
-      oldSocketId: socket.id,
-      userId,
-      disconnectedAt: Date.now(),
-    };
+    const sessionId = user.sessionId;
 
-    const disconnectedCount = getDisconnectedCount(room);
+    for (const code in rooms) {
+      let room = await getRoom(code);
+      if (!room) continue;
 
-    if (disconnectedCount >= 2) {
-      room.status = "BOTH_OFFLINE";
-      room.bothOfflineAt = Date.now();
+      room = ensureDisconnectState(room);
 
-      console.log("⚠️ DUA PLAYER DISCONNECT:", code);
+      if (room.host !== sessionId && room.guest !== sessionId) {
+        continue;
+      }
 
-      clearPlayerDisconnectTimer(code, room.host);
-      clearPlayerDisconnectTimer(code, room.guest);
+      if (room.status === "FINISHED" || room.status === "ABANDONED") {
+        continue;
+      }
 
-      startBothOfflineTimer(code);
-    } else {
-      room.status = "ONE_OFFLINE";
+      if (!room.sessions) room.sessions = {};
 
-      console.log("⚠️ SATU PLAYER DISCONNECT:", userId);
+      room.sessions[sessionId] = buildSessionFromUser(user);
 
-      startPlayerDisconnectTimer(code, userId);
+      room.disconnectedPlayers[sessionId] = {
+        oldSocketId: socket.id,
+        sessionId,
+        disconnectedAt: Date.now(),
+      };
+
+      const disconnectedCount = getDisconnectedCount(room);
+
+      if (disconnectedCount >= 2) {
+        room.status = "BOTH_OFFLINE";
+        room.bothOfflineAt = Date.now();
+
+        console.log("⚠️ DUA PLAYER DISCONNECT:", code);
+
+        clearPlayerDisconnectTimer(code, room.host);
+        clearPlayerDisconnectTimer(code, room.guest);
+
+        startBothOfflineTimer(code);
+      } else {
+        room.status = "ONE_OFFLINE";
+
+        console.log("⚠️ SATU PLAYER DISCONNECT:", sessionId);
+
+        startPlayerDisconnectTimer(code, sessionId);
+      }
+
+      rooms[code] = room;
+      await saveRoom(code, room);
+
+      io.to(code).emit("playerDisconnected", {
+        sessionId,
+        status: room.status,
+      });
+
+      break;
     }
 
-    rooms[code] = room;
-    await saveRoom(code, room);
-
-    io.to(code).emit("playerDisconnected", {
-      userId,
-      status: room.status,
-    });
-
-    break;
-  }
-
-  delete connectedUsers[socket.id];
-});
+    delete connectedUsers[socket.id];
+  });
 
   // =====================================================
   // SYNC CONFIG
@@ -1330,30 +1461,26 @@ socket.on("disconnect", async () => {
 
     if (!config) return;
 
-    if (!config.gameplay?.score) {
-      console.error("❌ SCORE TIDAK ADA DI CONFIG!");
-    }
-
     GAME_CONFIG = {
-      turn_time: config.gameplay?.turn_time ?? 15,
-      placement_time: config.gameplay?.placement_time ?? 30,
-      ship_cooldowns: config.gameplay?.ship_cooldowns ?? {},
+      turn_time: config.turn_time ?? 15,
+      placement_time: config.placement_time ?? 30,
+
+      ship_cooldowns: {
+        spaceship1: config.cooldown_spaceship1 ?? 0,
+        spaceship2: config.cooldown_spaceship2 ?? 3,
+        spaceship3: config.cooldown_spaceship3 ?? 0,
+        spaceship4: config.cooldown_spaceship4 ?? 2,
+      },
+
       score: {
-        hit: config.gameplay?.score?.hit ?? 10,
-        win_bonus: config.gameplay?.score?.win_bonus ?? 50,
+        hit: config.score_hit ?? 10,
+        win_bonus: config.score_win_bonus ?? 50,
       },
     };
 
     console.log("✅ GAME_CONFIG FINAL:", GAME_CONFIG);
 
-    io.emit("configSync", {
-      gameplay: {
-        turn_time: GAME_CONFIG.turn_time,
-        placement_time: GAME_CONFIG.placement_time,
-        ship_cooldowns: GAME_CONFIG.ship_cooldowns,
-      },
-      score: GAME_CONFIG.score,
-    });
+    io.emit("configSync", GAME_CONFIG);
   });
 });
 

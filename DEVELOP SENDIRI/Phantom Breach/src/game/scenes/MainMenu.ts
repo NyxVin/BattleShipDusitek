@@ -418,35 +418,44 @@ window.onbeforeunload = () => {
       enemyText,
     ]);
 
-    socket.off("roomCreated");
+socket.off("roomCreated");
 
-    socket.on("roomCreated", (code: string) => {
-      console.log("🔥 ROOM DITERIMA:", code);
+socket.on("roomCreated", async (code: string) => {
+  console.log("🔥 ROOM DITERIMA:", code);
 
-      this.roomCode = code;
+  this.roomCode = code;
 
-      roomCodeText.setText(code);
-      this.friendMenuContainer.setVisible(false);
-      this.createRoomContainer.setVisible(true);
-    });
+  roomCodeText.setText(code);
+  this.friendMenuContainer.setVisible(false);
 
-    socket.on("roomJoined", (code: string) => {
-      console.log("BERHASIL JOIN ROOM:", code);
-      this.roomCode = code;
-      rightIcon.setTexture("vilain");
-      rightIcon.setScale(0.4);
+  await document.fonts.ready;
 
-      enemyCard.setTexture("mm_card_player_active");
-      enemyCard.clearTint();
+  this.refreshTextFonts(this.createRoomContainer);
+  this.createRoomContainer.setVisible(true);
+});
 
-      enemyText.setText("\nLawan\n• Online");
-      enemyText.setColor("#0D3B8E");
-      enemyText.setAlpha(1);
+socket.off("roomJoined");
 
-      bottomText.setText("Lawan ditemukan!");
-      shareText.setText("Siap untuk bermain");
-    });
-    socket.off("playerJoined");
+socket.on("roomJoined", (code: string) => {
+  console.log("BERHASIL JOIN ROOM:", code);
+
+  this.roomCode = code;
+
+  rightIcon.setTexture("vilain");
+  rightIcon.setScale(0.4);
+
+  enemyCard.setTexture("mm_card_player_active");
+  enemyCard.clearTint();
+
+  enemyText.setText("\nLawan\n• Online");
+  enemyText.setColor("#0D3B8E");
+  enemyText.setAlpha(1);
+
+  bottomText.setText("Lawan ditemukan!");
+  shareText.setText("Siap untuk bermain");
+});
+
+socket.off("playerJoined");
 
     socket.on("playerJoined", (code: string) => {
       console.log("🔥 HOST LIHAT PLAYER JOIN:", code);
@@ -668,16 +677,13 @@ if (!isAuthenticated) {
       });
     });
 
-friendButton.on("pointerdown", () => {
+friendButton.on("pointerdown", async () => {
   this.mainMenuContainer.setVisible(false);
-  this.friendMenuContainer.setVisible(true);
 
-  // 💣 FORCE REFRESH FONT
-  this.friendMenuContainer.iterate((obj: any) => {
-    if (obj.setFontFamily && obj.style?.fontFamily) {
-      obj.setFontFamily(obj.style.fontFamily);
-    }
-  });
+  await document.fonts.ready;
+
+  this.refreshTextFonts(this.friendMenuContainer);
+  this.friendMenuContainer.setVisible(true);
 });
 
     backButton.on("pointerdown", () => {
@@ -691,20 +697,32 @@ friendButton.on("pointerdown", () => {
       socket.emit("createRoom");
     });
 
-    joinRoomButton.on("pointerdown", () => {
-      this.friendMenuContainer.setVisible(false);
-      this.joinRoomContainer.setVisible(true);
-    });
+    joinRoomButton.on("pointerdown", async () => {
+  this.friendMenuContainer.setVisible(false);
 
-    joinBackButton.on("pointerdown", () => {
-      this.joinRoomContainer.setVisible(false);
-      this.friendMenuContainer.setVisible(true);
-    });
+  await document.fonts.ready;
 
-    createBackButton.on("pointerdown", () => {
-      this.createRoomContainer.setVisible(false);
-      this.friendMenuContainer.setVisible(true);
-    });
+  this.refreshTextFonts(this.joinRoomContainer);
+  this.joinRoomContainer.setVisible(true);
+});
+
+joinBackButton.on("pointerdown", async () => {
+  this.joinRoomContainer.setVisible(false);
+
+  await document.fonts.ready;
+
+  this.refreshTextFonts(this.friendMenuContainer);
+  this.friendMenuContainer.setVisible(true);
+});
+
+createBackButton.on("pointerdown", async () => {
+  this.createRoomContainer.setVisible(false);
+
+  await document.fonts.ready;
+
+  this.refreshTextFonts(this.friendMenuContainer);
+  this.friendMenuContainer.setVisible(true);
+});
 
     copyButton.on("pointerdown", () => {
       if (!this.roomCode) {
@@ -739,6 +757,18 @@ friendButton.on("pointerdown", () => {
         this.showMatchExpiredModal(matchExpiredNotice);
       });
     }
+  }
+
+
+    private refreshTextFonts(container: Phaser.GameObjects.Container) {
+    container.iterate((obj: any) => {
+      if (obj && obj.type === "Text") {
+        const fontFamily = obj.style?.fontFamily || "Poppins";
+
+        obj.setFontFamily(fontFamily);
+        obj.updateText();
+      }
+    });
   }
 
   private showMatchExpiredModal(data: any) {

@@ -90,7 +90,7 @@ export class Placement extends Scene {
       }));
     };
     const cfg = this.registry.get("gameConfig");
-    let currentTime = data?.timeLeft ?? cfg.schema.gameplay.placement_time;
+    let currentTime = data?.timeLeft ?? cfg.placement_time;
     headerTimerText.setText(currentTime.toString());
     socket.off("placementTick");
     socket.on("placementTick", (data: any) => {
@@ -393,10 +393,12 @@ export class Placement extends Scene {
           bgm.stop();
         }
 
-        this.scene.start("MainGame", {
-          roomCode: data.roomCode,
-          ships: data.ships,
-        });
+this.scene.start("MainGame", {
+  roomCode: data.roomCode,
+  ships: data.ships,
+  currentTurn: data.currentTurn,
+  timeLeft: data.timeLeft,
+});
       });
     });
   }

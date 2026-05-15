@@ -17,22 +17,18 @@ console.log("SERVER URL:", SERVER_URL);
 
 // Membuat koneksi Socket.IO, tapi belum langsung connect.
 socket.on("connect", () => {
-
   console.log("🔥 SOCKET CONNECT:", socket.id);
 
   socket.emit("auth", {
     sessionToken: SessionManager.sessionToken,
     sessionId: SessionManager.sessionId,
-    userId: SessionManager.userId,
-    username: SessionManager.username,
-    eventId: SessionManager.eventId,
-    gameId: SessionManager.gameId,
+    apiBaseUrl: SessionManager.apiBaseUrl,
+    expiresAt: SessionManager.expiresAt,
   });
 });
 
 // Saat socket berhasil connect, client langsung mengirim data auth ke server.
 socket.on("authSuccess", () => {
-
   console.log("✅ AUTH SUCCESS");
 
   isAuthenticated = true;
@@ -48,7 +44,6 @@ socket.on("disconnect", (reason) => {
   console.log("❌ SOCKET DISCONNECT:", reason);
 });
 
-// Dipanggil saat koneksi socket terputus.
 socket.on("matchExpired", (data) => {
   console.log("⚠️ MATCH EXPIRED:", data);
 
@@ -59,8 +54,16 @@ socket.on("matchExpired", (data) => {
   );
 });
 
-// Event saat match invalid karena dua player disconnect terlalu lama.
-// Event saat player yang kalah karena disconnect masuk lagi ke game.
+socket.on("matchEnded", (data) => {
+  console.log("🏁 MATCH ENDED:", data);
+
+  window.dispatchEvent(
+    new CustomEvent("matchEnded", {
+      detail: data,
+    })
+  );
+});
+
 socket.on("lateGameResult", (data) => {
   console.log("🏁 LATE GAME RESULT:", data);
 

@@ -3,10 +3,6 @@ export const SessionManager = {
   sessionToken: "",
   apiBaseUrl: "",
   expiresAt: "",
-  userId: "",
-  username: "",
-  eventId: "",
-  gameId: "",
 
   // File ini menyimpan data session player dari CMS/SISFO.
   init(data: any) {
@@ -14,10 +10,6 @@ export const SessionManager = {
     this.sessionToken = data.session_token || "";
     this.apiBaseUrl = typeof data.api_base_url === "string" ? data.api_base_url.replace(/\/$/, "") : "";
     this.expiresAt = data.expires_at || "";
-    this.userId = data.user_id || "";
-    this.username = data.username || "";
-    this.eventId = data.event_id || "";
-    this.gameId = data.game_id || "";
 
     console.log("🔥 SESSION INIT:", {
       sessionId: this.sessionId,

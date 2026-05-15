@@ -61,8 +61,13 @@ export class Game extends Scene {
 
   create() {
     const cfg = this.registry.get("gameConfig");
-    this.turnTime = cfg.schema.gameplay.turn_time;
-    const cooldowns = cfg.schema?.gameplay?.ship_cooldowns;
+    this.turnTime = cfg.turn_time;
+    const cooldowns: any = {
+  spaceship1: cfg.cooldown_spaceship1 ?? 0,
+  spaceship2: cfg.cooldown_spaceship2 ?? 3,
+  spaceship3: cfg.cooldown_spaceship3 ?? 0,
+  spaceship4: cfg.cooldown_spaceship4 ?? 2,
+};
 
     this.shipsUI.forEach((ship) => {
       ship.cooldown = cooldowns?.[ship.key] ?? ship.cooldown;
@@ -111,12 +116,12 @@ export class Game extends Scene {
     const header = this.add.container(centerX, 45);
     const panel = this.add.image(0, 0, "panel_top").setScale(0.5);
     const dot = this.add.circle(-130, 0, 5, 0xfacc15);
-    this.turnText = this.add.text(-117, -18, cfg.schema.ui.header.title, {
+    this.turnText = this.add.text(-117, -18, cfg.header_title, {
       fontSize: "18px",
       fontFamily: "Lilita One",
       color: "#1E3A8A",
     });
-    const subtitle = this.add.text(-115, 3, cfg.schema.ui.header.subtitle, {
+    const subtitle = this.add.text(-115, 3, cfg.header_subtitle, {
       fontSize: "12px",
       fontFamily: "Lilita One",
       color: "#6B7280",
@@ -198,14 +203,59 @@ export class Game extends Scene {
       })
       .setOrigin(0.5)
       .setStroke("#ffffff", 4);
+
     this.turnPopup = this.add
       .container(this.scale.width / 2, midY, [bgGraphics, this.turnPopupText])
       .setDepth(50)
       .setScale(0.3)
       .setAlpha(0);
 
+      // =====================================================
+// POPUP GILIRAN PERTAMA SAAT BARU MASUK BATTLE
+// =====================================================
+const initialTurn =
+  this.gameData?.currentTurn ||
+  this.gameData?.room?.currentTurn ||
+  null;
+
+const initialTimeLeft =
+  this.gameData?.timeLeft ||
+  this.gameData?.room?.timeLeft ||
+  this.turnTime;
+
+console.log("🔥 INITIAL TURN DI MAIN GAME:", {
+  initialTurn,
+  myId: SessionManager.sessionId,
+  isMyTurn: String(initialTurn) === String(SessionManager.sessionId),
+});
+
+if (initialTurn) {
+  this.isMyTurn = String(initialTurn) === String(SessionManager.sessionId);
+  this.turnTime = initialTimeLeft;
+
+  if (this.timerText && this.timerText.active) {
+    this.timerText.setText(initialTimeLeft + "s");
+  }
+
+  this.time.delayedCall(500, () => {
+    if (!this.scene.isActive()) return;
+
+    if (this.isMyTurn) {
+      this.showTurnPopup(
+        cfg.text_turn,
+        cfg.color_turn
+      );
+    } else {
+      this.showTurnPopup(
+        cfg.text_enemy,
+        cfg.color_enemy
+      );
+    }
+  });
+}
+
     if (this.gameData && this.gameData.ships) {
-      const myId = SessionManager.userId;
+      const myId = SessionManager.sessionId;
       const myShips = this.gameData.ships[myId];
       console.log("MY ID:", myId);
       console.log("ALL SHIPS:", this.gameData.ships);
@@ -214,7 +264,7 @@ export class Game extends Scene {
       this.time.delayedCall(100, () => {
         if (!this.scene.isActive()) return;
 
-        const myId = SessionManager.userId;
+        const myId = SessionManager.sessionId;
         const myShips = this.gameData?.ships?.[myId];
 
         if (myShips) {
@@ -287,7 +337,7 @@ export class Game extends Scene {
 
       container.on("pointerdown", () => {
         if (ship.cooldownActive && ship.cooldownLeft > 0) {
-          this.showTurnPopup(cfg.schema.ui.text.cooldown, cfg.schema.ui.colors.enemy);
+          this.showTurnPopup(cfg.text_cooldown, cfg.color_enemy);
           return;
         }
         this.selectedShipIndex = i;
@@ -327,7 +377,7 @@ export class Game extends Scene {
         const ship = this.shipsUI[this.selectedShipIndex];
 
         if (ship.cooldownActive && ship.cooldownLeft > 0) {
-          this.showTurnPopup(cfg.schema.ui.text.cooldown, cfg.schema.ui.colors.enemy);
+          this.showTurnPopup(cfg.text_cooldown, cfg.color_enemy);
           return;
         }
 
@@ -391,50 +441,45 @@ export class Game extends Scene {
       this.gameData?.currentTurn ||
       "";
 
-    let firstTickAfterSceneStart = true;
 
-    socket.on("game_tick", (data) => {
-      if (!this.timerText || !this.timerText.active) return;
 
-      this.timerText.setText(data.timeLeft + "s");
+socket.on("game_tick", (data) => {
+  if (!this.timerText || !this.timerText.active) return;
+  if (!data || !data.currentTurn) return;
 
-      const prevTurn = lastTurn;
-      lastTurn = data.currentTurn;
+  this.timerText.setText(data.timeLeft + "s");
 
-      this.isMyTurn = data.currentTurn === SessionManager.userId;
-      this.turnTime = data.timeLeft;
+  const prevTurn = lastTurn;
+  lastTurn = data.currentTurn;
 
-      // Tick pertama hanya untuk sync UI.
-      // Jangan munculkan popup giliran dulu.
-      if (firstTickAfterSceneStart) {
-        firstTickAfterSceneStart = false;
-        return;
-      }
+  this.isMyTurn = String(data.currentTurn) === String(SessionManager.sessionId);
+  this.turnTime = data.timeLeft;
 
-      if (prevTurn !== data.currentTurn) {
-        // 🔥 HANYA SAAT GILIRAN KAMU
-        // 🔥 JIKA SEBELUMNYA GILIRAN KAMU
-        if (data.currentTurn === SessionManager.userId) {
-          this.shipsUI.forEach((ship) => {
-            if (ship.cooldownActive && ship.cooldownLeft > 0) {
-              ship.cooldownLeft--;
+  if (prevTurn !== data.currentTurn) {
+    if (this.isMyTurn) {
+      this.shipsUI.forEach((ship) => {
+        if (ship.cooldownActive && ship.cooldownLeft > 0) {
+          ship.cooldownLeft--;
 
-              if (ship.cooldownLeft <= 0) {
-                ship.cooldownLeft = 0;
-                ship.cooldownActive = false;
-              }
-            }
-          });
+          if (ship.cooldownLeft <= 0) {
+            ship.cooldownLeft = 0;
+            ship.cooldownActive = false;
+          }
         }
+      });
 
-        // popup tetap
-        if (this.isMyTurn) {
-          this.showTurnPopup(cfg.schema.ui.text.turn, cfg.schema.ui.colors.turn);
-        } else {
-          this.showTurnPopup(cfg.schema.ui.text.enemy, cfg.schema.ui.colors.enemy);
-        }
-      }
-    });
+      this.showTurnPopup(
+        cfg.text_turn,
+        cfg.color_turn
+      );
+    } else {
+      this.showTurnPopup(
+        cfg.text_enemy,
+        cfg.color_enemy
+      );
+    }
+  }
+});
 
     socket.on("attackResult", ({ cells, target, attackerId }) => {
       if (!cells || cells.length === 0) {
@@ -442,7 +487,7 @@ export class Game extends Scene {
         this.isAnimating = false;
         return;
       }
-      this.sfx.misil.play({ volume: attackerId === SessionManager.userId ? 0.5 : 0.4 });
+      this.sfx.misil.play({ volume: attackerId === SessionManager.sessionId ? 0.5 : 0.4 });
       this.isAnimating = true;
       this.time.delayedCall(5000, () => {
         if (this.isAnimating) {
@@ -459,7 +504,7 @@ export class Game extends Scene {
       let pending = cells.length;
       let isAnyHit = false;
       cells.forEach(({ x, y, hit }: any) => {
-        const isEnemy = attackerId === SessionManager.userId;
+        const isEnemy = attackerId === SessionManager.sessionId;
         // 🔥 FIX: UPDATE STATE GRID TANPA TINT
         if (hit) {
           if (isEnemy) {
@@ -555,8 +600,8 @@ export class Game extends Scene {
             pending--;
 
             if (pending === 0 && !soundPlayed) {
-              if (attackerId === SessionManager.userId) {
-                if (attackerId === SessionManager.userId) {
+              if (attackerId === SessionManager.sessionId) {
+                if (attackerId === SessionManager.sessionId) {
                   const ship = this.shipsUI[this.lastUsedShipIndex];
 
                   if (ship && ship.cooldown > 0) {
@@ -569,9 +614,9 @@ export class Game extends Scene {
               }
               soundPlayed = true;
               if (isAnyHit) {
-                this.sfx.explosion.play({ volume: attackerId === SessionManager.userId ? 0.6 : 0.4 });
+                this.sfx.explosion.play({ volume: attackerId === SessionManager.sessionId ? 0.6 : 0.4 });
               } else {
-                this.sfx.waterboom.play({ volume: attackerId === SessionManager.userId ? 0.9 : 0.5 });
+                this.sfx.waterboom.play({ volume: attackerId === SessionManager.sessionId ? 0.9 : 0.5 });
               }
               this.isAnimating = false;
 
@@ -600,7 +645,7 @@ export class Game extends Scene {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
       this.lastUsedShipIndex = -1;
-      this.showTurnPopup(cfg.schema.ui.text.invalid, cfg.schema.ui.colors.invalid);
+      this.showTurnPopup(cfg.text_invalid, cfg.color_invalid);
     });
 
     socket.on("gameOver", (data) => {
@@ -704,6 +749,7 @@ export class Game extends Scene {
   }
 
   attack() {
+    const cfg = this.registry.get("gameConfig");
     if (!this.isMyTurn) return;
 
     if (!this.selectedCell) {
@@ -721,7 +767,7 @@ export class Game extends Scene {
     const ship = this.shipsUI[this.selectedShipIndex];
     if (ship.cooldownActive && ship.cooldownLeft > 0) {
       console.log("❌ MASIH COOLDOWN (ATTACK)");
-      this.showTurnPopup(cfg.schema.ui.text.cooldown, cfg.schema.ui.colors.enemy);
+      this.showTurnPopup(cfg.text_cooldown, cfg.color_enemy);
       return;
     }
     const w = this.isVerticalAttack ? ship.height : ship.width;
@@ -755,7 +801,7 @@ export class Game extends Scene {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
 
-      this.showTurnPopup(cfg.schema.ui.text.invalid, cfg.schema.ui.colors.invalid);
+      this.showTurnPopup(cfg.text_invalid, cfg.color_invalid);
       return;
     }
     if (!valid) {
@@ -768,7 +814,7 @@ export class Game extends Scene {
       this.previewRects.forEach((r) => r.destroy());
       this.previewRects = [];
 
-      this.showTurnPopup(cfg.schema.ui.text.invalid, cfg.schema.ui.colors.invalid);
+      this.showTurnPopup(cfg.text_invalid, cfg.color_invalid);
       return;
     }
     console.log("🔥 ATTACK DIKIRIM:", { x, y, w, h });
@@ -917,7 +963,7 @@ export class Game extends Scene {
 
     this.time.removeAllEvents();
 
-    const myScore = scores[SessionManager.userId]|| {
+    const myScore = scores[SessionManager.sessionId]|| {
       totalAttack: 0,
       hitCount: 0,
       missCount: 0,
@@ -927,7 +973,7 @@ export class Game extends Scene {
 
     const resultData = {
       winner: winner,
-      myId: SessionManager.userId,
+      myId: SessionManager.sessionId,
       total: myScore.totalAttack,
       hit: myScore.hitCount,
       miss: myScore.missCount,

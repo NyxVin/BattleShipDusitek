@@ -1,15 +1,32 @@
 import axios from "axios";
 
-// File ini mencoba mengambil config game dari CMS/config.json.
-
+// Load config game dari CMS berdasarkan event_slug
 export async function loadConfig() {
   try {
-    const res = await axios.get("/config.json");
+    // Ambil query string dari URL
+    const params = new URLSearchParams(window.location.search);
+
+    const eventSlug = params.get("event_slug");
+    const apiBaseUrl = params.get("api_base_url");
+
+    // Validasi query
+    if (!eventSlug || !apiBaseUrl) {
+      throw new Error("event_slug atau api_base_url tidak ditemukan di query string");
+    }
+
+    // Bentuk endpoint CMS
+    const url = `${apiBaseUrl}/event/${eventSlug}/game-config`;
+
+    console.log("LOAD CONFIG FROM:", url);
+
+    // Request config ke CMS
+    const res = await axios.get(url);
+
     return res.data;
   } catch (err) {
     console.error("❌ GAGAL LOAD CMS:", err);
-    // Jika config berhasil diambil, game memakai config dari CMS.
-    // Jika gagal, game akan memakai default config.
+
+    // fallback kalau gagal
     return null;
   }
 }

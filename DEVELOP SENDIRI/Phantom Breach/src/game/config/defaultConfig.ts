@@ -1,78 +1,48 @@
 export const DEFAULT_CONFIG = {
-  version: "v1",
-  event_id: 0,
-  game_id: 0,
+  turn_time: 15,
+  placement_time: 30,
 
-  schema: {
-    gameplay: {
-      turn_time: 15,
-      placement_time: 10,
+  cooldown_spaceship1: 0,
+  cooldown_spaceship2: 3,
+  cooldown_spaceship3: 0,
+  cooldown_spaceship4: 2,
 
-      ship_cooldowns: {
-        spaceship1: 0,
-        spaceship2: 3,
-        spaceship3: 0,
-        spaceship4: 2,
-      },
+  score_hit: 10,
+  score_win_bonus: 50,
 
-      score: {
-        hit: 100,
-        win_bonus: 300,
-      },
-    },
+  background: "assets/background.png",
 
-    assets: {
-      background: "assets/background.png",
+  ship_spaceship1: "assets/spaceship1.png",
+  ship_spaceship2: "assets/spaceship2.png",
+  ship_spaceship3: "assets/spaceship3.png",
+  ship_spaceship4: "assets/spaceship4.png",
 
-      ships: {
-        spaceship1: "assets/spaceship1.png",
-        spaceship2: "assets/spaceship2.png",
-        spaceship3: "assets/spaceship3.png",
-        spaceship4: "assets/spaceship4.png",
-      },
+  effect_hit: "assets/hit.png",
+  effect_miss: "assets/miss.png",
+  effect_bullet: "assets/peluru.png",
+  effect_target: "assets/target.png",
 
-      effects: {
-        hit: "assets/hit.png",
-        miss: "assets/miss.png",
-        bullet: "assets/peluru.png",
-        target: "assets/target.png",
-      },
+  audio_bgm: "assets/sound/soundgame.mp3",
+  audio_win: "assets/sound/winner.mp3",
+  audio_lose: "assets/sound/lose.mp3",
+  audio_explosion: "assets/sound/explosion.mp3",
+  audio_shoot: "assets/sound/misil.mp3",
+  audio_miss: "assets/sound/waterboom.mp3",
 
-      audio: {
-        bgm: "assets/sound/soundgame.mp3",
-        win: "assets/sound/winner.mp3",
-        lose: "assets/sound/lose.mp3",
-        explosion: "assets/sound/explosion.mp3",
-        shoot: "assets/sound/misil.mp3",
-        miss: "assets/sound/waterboom.mp3",
-      },
-    },
+  text_turn: "GILIRAN KAMU",
+  text_enemy: "GILIRAN LAWAN",
+  text_invalid: "INVALID",
+  text_cooldown: "COOLDOWN!",
 
-    ui: {
-      text: {
-        turn: "GILIRAN KAMU",
-        enemy: "GILIRAN LAWAN",
-        invalid: "INVALID",
-        cooldown: "COOLDOWN!",
-      },
+  color_turn: "#D9A909",
+  color_enemy: "#FF0000",
+  color_invalid: "#FF0000",
 
-      colors: {
-        turn: "#D9A909",
-        enemy: "#FF0000",
-        invalid: "#FF0000",
-      },
+  header_title: "IT'S TIME TO WAR",
+  header_subtitle: "Pilih target untuk diserang!",
 
-      header: {
-        title: "IT'S TIME TO WAR",
-        subtitle: "Pilih target untuk diserang!",
-      },
-
-      result: {
-        win_text: "MENANG!",
-        lose_text: "KALAH...",
-        win_desc: "Semua unit musuh berhasil dihancurkan!",
-        lose_desc: "Semua unitmu berhasil dihancurkan!",
-      },
-    },
-  },
+  result_win_text: "MENANG!",
+  result_lose_text: "KALAH...",
+  result_win_desc: "Semua unit musuh berhasil dihancurkan!",
+  result_lose_desc: "Semua unitmu berhasil dihancurkan!",
 };
