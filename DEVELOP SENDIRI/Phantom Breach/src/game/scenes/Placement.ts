@@ -46,7 +46,7 @@ export class Placement extends Scene {
     let isReady = false;
     let isClickingUI = false;
     let selectedShipIndex: number | null = null;
-    let shipGraphics: Phaser.GameObjects.Image[] = [];
+    let shipGraphics: Phaser.GameObjects.GameObject[] = [];
     let shipObjects: any[] = [];
     let previewGraphics: Phaser.GameObjects.Rectangle[] = [];
     let isDragging = false;
@@ -80,15 +80,16 @@ export class Placement extends Scene {
 
     header.setDepth(10);
 
-    const getCleanShips = () => {
-      return shipObjects.map((s) => ({
-        x: Math.floor(s.x),
-        y: Math.floor(s.y),
-        width: s.width,
-        height: s.height,
-        vertical: s.vertical,
-      }));
-    };
+const getCleanShips = () => {
+  return shipObjects.map((s) => ({
+    key: s.key,
+    x: Math.floor(s.x),
+    y: Math.floor(s.y),
+    width: s.width,
+    height: s.height,
+    vertical: s.vertical,
+  }));
+};
     const cfg = this.registry.get("gameConfig");
     let currentTime = data?.timeLeft ?? cfg.placement_time;
     headerTimerText.setText(currentTime.toString());
@@ -162,50 +163,82 @@ export class Placement extends Scene {
       }
       return false;
     };
-    const drawAllShips = () => {
-      shipGraphics.forEach((g) => g.destroy());
-      shipGraphics = [];
 
-      shipObjects.forEach((data, index) => {
-        const w = data.vertical ? data.height : data.width;
-        const h = data.vertical ? data.width : data.height;
+const drawAllShips = () => {
+  shipGraphics.forEach((g) => g.destroy());
+  shipGraphics = [];
 
-        for (let i = 0; i < w; i++) {
-          for (let j = 0; j < h; j++) {
-            const tile = this.add
-              .image(startX + (data.x + i) * cellSize + cellSize / 2, startY + (data.y + j) * cellSize + cellSize / 2, "tile_water")
-              .setDisplaySize(cellSize, cellSize)
-              .setTint(index === selectedShipIndex ? 0xf59e0b : 0xfacc15)
-              .setDepth(2)
-              .setInteractive(); // 🔥 WAJIB
+  shipObjects.forEach((data, index) => {
+    const w = data.vertical ? data.height : data.width;
+    const h = data.vertical ? data.width : data.height;
 
-            tile.on("pointerdown", () => {
-              previewGraphics.forEach((g) => g.destroy());
-              previewGraphics = [];
-              
-              if (isReady) return;
-              isDragging = true;
-              selectedShipIndex = index;
+    const shipW = w * cellSize;
+    const shipH = h * cellSize;
 
-              const allCards = this.children.list.filter((obj) => obj instanceof Phaser.GameObjects.Container);
-              allCards.forEach((container: any, cIndex) => {
-                const bg = container.list[0] as Phaser.GameObjects.Image;
+    const centerXShip = startX + data.x * cellSize + shipW / 2;
+    const centerYShip = startY + data.y * cellSize + shipH / 2;
 
-                if (cIndex === selectedShipIndex) {
-                  bg.setTint(0xffff00);
-                } else {
-                  bg.clearTint();
-                }
-              });
+    // Asset kapal di atas tile water
+    const shipImage = this.add
+      .image(centerXShip, centerYShip, data.key)
+      .setDepth(4);
 
-              drawAllShips();
-            });
+    // Kalau kapal di-rotate, asset ikut rotate
+    if (data.vertical) {
+      shipImage.setRotation(Math.PI / 2);
+    } else {
+      shipImage.setRotation(0);
+    }
 
-            shipGraphics.push(tile); // 🔥 GANTI rect → tile
-          }
+    // Hitung scale supaya asset masuk ke area grid tanpa gepeng
+    const rawW = data.vertical ? shipImage.height : shipImage.width;
+    const rawH = data.vertical ? shipImage.width : shipImage.height;
+
+    const scale = Math.min(
+      (shipW * 0.88) / rawW,
+      (shipH * 0.88) / rawH
+    );
+
+    shipImage.setScale(scale);
+
+
+    // Area klik transparan supaya kapal tetap bisa dipilih/drag
+    const hitZone = this.add
+      .zone(centerXShip, centerYShip, shipW, shipH)
+      .setDepth(6)
+      .setInteractive({ cursor: "pointer" });
+
+    hitZone.on("pointerdown", () => {
+      previewGraphics.forEach((g) => g.destroy());
+      previewGraphics = [];
+
+      if (isReady) return;
+
+      isDragging = true;
+      selectedShipIndex = index;
+
+      const allCards = this.children.list.filter(
+        (obj) => obj instanceof Phaser.GameObjects.Container
+      );
+
+      allCards.forEach((container: any, cIndex) => {
+        const bg = container.list[0] as Phaser.GameObjects.Image;
+
+        if (cIndex === selectedShipIndex) {
+          bg.setTint(0xffff00);
+        } else {
+          bg.clearTint();
         }
       });
-    };
+
+      drawAllShips();
+    });
+
+    shipGraphics.push(shipImage);
+    shipGraphics.push(hitZone);
+
+  });
+};
 
     const drawPreview = (ship: any) => {
       if (!this.scene.isActive()) return;
@@ -266,9 +299,17 @@ export class Placement extends Scene {
     ships.forEach((ship, i) => {
       const x = startHeroX + i * (cardSize + gap) + cardSize / 2;
       const container = this.add.container(x, heroY).setDepth(10); // Pastikan depth tinggi
-      const bg = this.add.image(0, -10, "card_unit").setDisplaySize(cardSize, 65);
-      const shipIcon = this.add.image(0, -20, ship.key).setDisplaySize(45, 25);
-      const rangeIcon = this.add.image(0, 10, ship.rangeKey).setScale(0.35);
+      const bg = this.add.image(0, -10, "card_unit").setDisplaySize(cardSize, 80);
+
+const shipIcon = this.add.image(0, -18, ship.key);
+
+const maxW = 50;
+const maxH = 32;
+const scale = Math.min(maxW / shipIcon.width, maxH / shipIcon.height);
+
+shipIcon.setScale(scale);
+
+const rangeIcon = this.add.image(0, 20, ship.rangeKey).setScale(0.32);
 
       container.add([bg, shipIcon, rangeIcon]);
 
@@ -393,12 +434,12 @@ export class Placement extends Scene {
           bgm.stop();
         }
 
-this.scene.start("MainGame", {
-  roomCode: data.roomCode,
-  ships: data.ships,
-  currentTurn: data.currentTurn,
-  timeLeft: data.timeLeft,
-});
+        this.scene.start("MainGame", {
+          roomCode: data.roomCode,
+          ships: data.ships,
+          currentTurn: data.currentTurn,
+          timeLeft: data.timeLeft,
+        });
       });
     });
   }

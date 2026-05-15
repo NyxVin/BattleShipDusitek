@@ -35,6 +35,7 @@ export class Game extends Scene {
   pendingGameOver: { winner: string; scores: any } | null = null;
   roomCode: string = "";
   shipRects: Phaser.GameObjects.Rectangle[] = [];
+  selfShipImages: Phaser.GameObjects.Image[] = [];
   previewRects: Phaser.GameObjects.Rectangle[] = [];
   targetMarks: Phaser.GameObjects.Image[] = [];
   gameData: any;
@@ -286,8 +287,15 @@ if (initialTurn) {
     this.shipsUI.forEach((ship, i) => {
       const x = startXCard + i * (cardSize + gap) + cardSize / 2;
       const container = this.add.container(x, cardY);
-      const bg = this.add.image(0, -10, "card_unit").setDisplaySize(cardSize, 65); // Tinggikan sedikit agar muat 3 tumpuk
-      const shipIcon = this.add.image(0, -22, ship.key).setDisplaySize(35, 20);
+const bg = this.add.image(0, -10, "card_unit").setDisplaySize(cardSize, 80);
+
+const shipIcon = this.add.image(0, -18, ship.key);
+
+const maxW = 50;
+const maxH = 32;
+const scale = Math.min(maxW / shipIcon.width, maxH / shipIcon.height);
+
+shipIcon.setScale(scale);
 
       const cdText = this.add
         .text(0, 38, "", {
@@ -851,26 +859,59 @@ socket.on("game_tick", (data) => {
     cell.attacked = true; // 🔥 WAJIB
   }
 
-  renderShips(ships: any[]) {
-    ships.forEach((ship) => {
-      const w = ship.vertical ? ship.height : ship.width;
-      const h = ship.vertical ? ship.width : ship.height;
+renderShips(ships: any[]) {
+  // Hapus render kapal lama supaya tidak double
+  this.selfShipImages.forEach((img) => img.destroy());
+  this.selfShipImages = [];
 
-      for (let dx = 0; dx < w; dx++) {
-        for (let dy = 0; dy < h; dy++) {
-          const x = ship.x + dx;
-          const y = ship.y + dy;
+  ships.forEach((ship) => {
+    const w = ship.vertical ? ship.height : ship.width;
+    const h = ship.vertical ? ship.width : ship.height;
 
-          if (x < 0 || x >= this.COLS || y < 0 || y >= this.ROWS) continue;
+    const shipW = w * this.cellSize;
+    const shipH = h * this.cellSize;
 
-          const cell = this.selfGrid[y][x];
-          if (!cell.attacked) {
-            cell.rect.setTint(0x22c55e);
-          }
-        }
-      }
-    }); // 🔥 TUTUP forEach
-  } // 🔥 TUTUP renderShips
+    const selfStartY = this.enemyStartY + this.cellSize * this.ROWS + 20;
+
+    const centerXShip = this.startX + ship.x * this.cellSize + shipW / 2;
+    const centerYShip = selfStartY + ship.y * this.cellSize + shipH / 2;
+
+    // Fallback kalau data lama belum punya key
+    const textureKey =
+      ship.key ||
+      (ship.width === 1 && ship.height === 1
+        ? "spaceship1"
+        : ship.width === 2 && ship.height === 2
+        ? "spaceship2"
+        : ship.width === 2 && ship.height === 1
+        ? "spaceship3"
+        : "spaceship4");
+
+    const shipImage = this.add
+      .image(centerXShip, centerYShip, textureKey)
+      .setDepth(4);
+
+    // Kalau kapal di-rotate saat placement, di battle ikut rotate
+    if (ship.vertical) {
+      shipImage.setRotation(Math.PI / 2);
+    } else {
+      shipImage.setRotation(0);
+    }
+
+    // Scale aman, tidak gepeng
+    const rawW = ship.vertical ? shipImage.height : shipImage.width;
+    const rawH = ship.vertical ? shipImage.width : shipImage.height;
+
+    const scale = Math.min(
+      (shipW * 0.88) / rawW,
+      (shipH * 0.88) / rawH
+    );
+
+    shipImage.setScale(scale);
+
+    this.selfShipImages.push(shipImage);
+  });
+}
 
   showPreview(x: number, y: number) {
     if (this.selectedCell !== null || this.targetMarks.length > 0) return;
