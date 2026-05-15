@@ -8,6 +8,7 @@ export const SessionManager = {
   eventId: "",
   gameId: "",
 
+  // File ini menyimpan data session player dari CMS/SISFO.
   init(data: any) {
     this.sessionId = data.session_id || "";
     this.sessionToken = data.session_token || "";
@@ -24,6 +25,8 @@ export const SessionManager = {
     });
   },
 
+  // Mengisi data session dari parameter URL.
+  // Mengecek apakah session player sudah expired.
   isExpired() {
     if (!this.expiresAt) return false;
 

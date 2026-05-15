@@ -1,3 +1,6 @@
+// Menyimpan semua room aktif di memory server.
+// Object ini dipakai untuk menyimpan data room yang sedang berjalan.
+// Membuat kode room acak, contoh: AB-1234.
 export const rooms = {};
 export function generateRoomCode(){
     const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";

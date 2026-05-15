@@ -1,3 +1,7 @@
+// =====================================================
+// SERVER UTAMA GAME MULTIPLAYER BATTLESHIP
+// =====================================================
+// File ini menjadi pusat logic backend realtime game.
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -5,6 +9,13 @@ import { generateRoomCode, rooms } from "./roomManager.js";
 import { createClient } from "redis";
 import { createAdapter } from "@socket.io/redis-adapter";
 
+// =====================================================
+// GLOBAL STATE SERVER
+// =====================================================
+// matchmakingQueue menyimpan player yang sedang mencari lawan random.
+// playersInQueue mencegah player yang sama masuk queue lebih dari sekali.
+// GAME_CONFIG menyimpan aturan gameplay seperti turn_time, placement_time, cooldown, dan score.
+// Config ini dikirim dari client melalui event syncConfig.
 const matchmakingQueue = [];
 const playersInQueue = new Set();
 let GAME_CONFIG = null;
@@ -12,16 +23,34 @@ const app = express();
 app.use(express.json());
 const server = http.createServer(app);
 
+// =====================================================
+// SOCKET.IO SERVER
+// =====================================================
+// Socket.IO digunakan untuk komunikasi realtime antara client dan server.
+// Semua event realtime seperti matchmaking, placement, battle, attack, timer,
+// disconnect, dan reconnect dikirim melalui Socket.IO.
 const io = new Server(server, {
   cors: { origin: "*" },
 });
 
+// =====================================================
+// REDIS CLIENT
+// =====================================================
+// Redis digunakan untuk menyimpan state room sementara.
+// Dengan Redis, room tetap bisa diambil kembali ketika player reconnect.
+// pubClient dipakai untuk operasi Redis umum.
+// subClient dipakai untuk adapter Socket.IO Redis.
 const pubClient = createClient({
   url: "redis://127.0.0.1:6379",
 });
 
 const subClient = pubClient.duplicate();
 
+// =====================================================
+// REDIS ROOM HELPER
+// =====================================================
+// Helper ini bertugas menyimpan, mengambil, dan menghapus room dari Redis.
+// Format key Redis yang digunakan adalah room:<roomCode>.
 async function saveRoom(code, room) {
   await pubClient.set(`room:${code}`, JSON.stringify(room));
 }
@@ -35,6 +64,13 @@ async function deleteRoomRedis(code) {
   await pubClient.del(`room:${code}`);
 }
 
+// =====================================================
+// TIMER DAN USER CONNECTION STATE
+// =====================================================
+// roomIntervals menyimpan interval timer setiap room.
+// disconnectTimers menyimpan timer timeout untuk satu player disconnect.
+// bothOfflineTimers menyimpan timer timeout saat dua player disconnect.
+// connectedUsers memetakan socket.id ke data user/session yang sedang online.
 const roomIntervals = {};
 const disconnectTimers = {};
 const bothOfflineTimers = {};
@@ -44,6 +80,12 @@ const PLAYER_RECONNECT_TIMEOUT = 30000; // 30 detik, sama seperti logic lama kam
 const BOTH_OFFLINE_TIMEOUT = 60000; // 60 detik untuk dua-duanya offline
 const ROOM_IDLE_EXPIRE = 20000;
 
+// =====================================================
+// ROOM CLEANER
+// =====================================================
+// Cleaner berjalan berkala untuk membersihkan room yang sudah tidak aktif.
+// Room dengan status ONE_OFFLINE atau BOTH_OFFLINE tidak langsung dihapus,
+// karena masih ada kemungkinan player melakukan reconnect.
 setInterval(async () => {
   for (const code in rooms) {
     let room = await getRoom(code);
@@ -59,6 +101,10 @@ setInterval(async () => {
   }
 }, 10000);
 
+// =====================================================
+// CLEAN ROOM
+// =====================================================
+// Fungsi ini membersihkan room setelah match selesai, abandoned, atau tidak aktif.
 async function cleanRoom(code) {
   let room = await getRoom(code);
   if (!room) return;
@@ -75,6 +121,11 @@ async function cleanRoom(code) {
   delete rooms[code];
 }
 
+// =====================================================
+// FORCE START BATTLE
+// =====================================================
+// Fungsi ini memaksa room masuk ke fase battle.
+// Dipakai ketika semua player sudah ready atau timer placement sudah habis.
 async function forceStartBattle(roomCode) {
   let room = rooms[roomCode];
 
@@ -114,6 +165,14 @@ async function forceStartBattle(roomCode) {
   console.log("🔥 BATTLE DIMULAI:", roomCode);
 }
 
+
+// =====================================================
+// BATTLE GAME LOOP
+// =====================================================
+// Game loop battle berjalan setiap 1 detik.
+// Server menurunkan timeLeft, mengganti giliran jika timer habis,
+// lalu mengirim update timer dan currentTurn ke semua client di room.
+// Server menjadi sumber kebenaran untuk timer dan giliran.
 async function startGameLoop(roomCode) {
   if (!GAME_CONFIG) return;
 
@@ -145,6 +204,11 @@ async function startGameLoop(roomCode) {
   }, 1000);
 }
 
+// =====================================================
+// PLACEMENT TIMER
+// =====================================================
+// Timer ini berjalan saat fase placement kapal.
+// Jika waktu placement habis, server akan memaksa room masuk ke battle.
 async function startPlacementTimer(roomCode) {
   if (!GAME_CONFIG) {
     console.log("❌ CONFIG BELUM MASUK (placement)!");
@@ -200,6 +264,11 @@ async function startPlacementTimer(roomCode) {
   }, 1000);
 }
 
+// =====================================================
+// CHECK ALL SHIPS DESTROYED
+// =====================================================
+// Fungsi ini mengecek apakah semua cell kapal milik player sudah terkena hit.
+// Jika semua bagian kapal sudah terkena, player tersebut dianggap kalah.
 function isAllShipsDestroyed(ships, hits) {
   for (const ship of ships) {
     const w = ship.vertical ? ship.height : ship.width;
@@ -222,6 +291,11 @@ function isAllShipsDestroyed(ships, hits) {
   return true;
 }
 
+// =====================================================
+// BUILD SCORE
+// =====================================================
+// Fungsi ini menghitung statistik dan score akhir player.
+// Jika player menang, score ditambah win_bonus dari GAME_CONFIG.
 function buildScore(room, playerId, isWinner = false) {
   const s = room.scores[playerId] || {
     totalAttack: 0,
@@ -247,6 +321,12 @@ function buildScore(room, playerId, isWinner = false) {
   };
 }
 
+// =====================================================
+// DISCONNECT / RECONNECT HELPER
+// =====================================================
+// Helper di bagian ini digunakan untuk mendukung reconnect dan disconnect.
+// Fungsinya antara lain mencari lawan player, mencari field socket player,
+// memastikan struktur disconnectedPlayers tersedia, dan membersihkan timer reconnect.
 function getOpponentId(room, userId) {
   return room.host === userId ? room.guest : room.host;
 }
@@ -297,6 +377,12 @@ function clearBothOfflineTimer(roomCode) {
   }
 }
 
+// =====================================================
+// LATE RESULT STORAGE
+// =====================================================
+// Fungsi ini menyimpan result sementara untuk player yang disconnect sampai timeout.
+// Jika player tersebut membuka game lagi sebelum TTL Redis habis,
+// server akan mengirim event lateGameResult agar dia masuk halaman Result kalah.
 async function saveLateResultForPlayer(room, playerId, resultData) {
   await pubClient.setEx(
     `matchResult:${playerId}`,
@@ -308,6 +394,12 @@ async function saveLateResultForPlayer(room, playerId, resultData) {
   );
 }
 
+// =====================================================
+// EXPIRED MATCH STORAGE
+// =====================================================
+// Fungsi ini menyimpan info match expired untuk kedua player.
+// Dipakai ketika dua player disconnect sampai timeout.
+// Saat player membuka game lagi, client akan diarahkan ke MainMenu dengan notifikasi match expired.
 async function saveExpiredMatchForPlayers(room, reason) {
   const payload = {
     roomCode: room.code,
@@ -333,6 +425,14 @@ async function saveExpiredMatchForPlayers(room, reason) {
   }
 }
 
+// =====================================================
+// FINISH BY FORFEIT
+// =====================================================
+// Fungsi ini dipakai saat satu player disconnect terlalu lama.
+// Player yang disconnect dianggap kalah.
+// Lawannya yang masih berada di room dianggap menang.
+// Result player yang offline disimpan sementara agar saat dia kembali,
+// dia tetap bisa melihat halaman Result kalah.
 async function finishByForfeit(roomCode, loserId) {
   let room = await getRoom(roomCode);
   if (!room) return;
@@ -390,6 +490,12 @@ async function finishByForfeit(roomCode, loserId) {
   await cleanRoom(roomCode);
 }
 
+// =====================================================
+// ABANDON MATCH
+// =====================================================
+// Fungsi ini dipakai saat dua player sama-sama disconnect sampai timeout.
+// Match dianggap invalid / abandoned.
+// Tidak ada winner dan score tidak dikirim.
 async function abandonMatch(roomCode) {
   let room = await getRoom(roomCode);
   if (!room) return;
@@ -423,6 +529,12 @@ async function abandonMatch(roomCode) {
   await cleanRoom(roomCode);
 }
 
+// =====================================================
+// SINGLE PLAYER DISCONNECT TIMER
+// =====================================================
+// Timer ini aktif ketika hanya satu player disconnect.
+// Jika player tidak reconnect sebelum PLAYER_RECONNECT_TIMEOUT,
+// maka player tersebut kalah by forfeit.
 function startPlayerDisconnectTimer(roomCode, userId) {
   const key = `${roomCode}:${userId}`;
 
@@ -453,6 +565,12 @@ function startPlayerDisconnectTimer(roomCode, userId) {
   }, PLAYER_RECONNECT_TIMEOUT);
 }
 
+// =====================================================
+// BOTH PLAYERS OFFLINE TIMER
+// =====================================================
+// Timer ini aktif ketika dua player sama-sama disconnect.
+// Jika tidak ada player yang reconnect sebelum BOTH_OFFLINE_TIMEOUT,
+// maka match dianggap abandoned.
 function startBothOfflineTimer(roomCode) {
   clearBothOfflineTimer(roomCode);
 
@@ -474,10 +592,12 @@ function startBothOfflineTimer(roomCode) {
   }, BOTH_OFFLINE_TIMEOUT);
 }
 
-// =========================
-// SESSION API
-// =========================
-
+// =====================================================
+// SUBMIT SCORE ENDPOINT
+// =====================================================
+// Endpoint ini menerima data score dari client game.
+// Pada integrasi SISFO, endpoint submit score bisa berada di backend SISFO.
+// Di server lokal, endpoint ini digunakan untuk testing pengiriman score.
 app.post("/game-sessions/submit-score", async (req, res) => {
   console.log("🏆 SUBMIT SCORE:");
   console.log(req.body);
@@ -493,6 +613,11 @@ app.post("/game-sessions/submit-score", async (req, res) => {
   });
 });
 
+// =====================================================
+// END SESSION ENDPOINT
+// =====================================================
+// Endpoint ini digunakan untuk menandai session selesai.
+// Biasanya dipanggil ketika player keluar atau menutup game.
 app.post("/game-sessions/end", (req, res) => {
   console.log("🛑 END SESSION:");
   console.log(req.body);
@@ -503,8 +628,20 @@ app.post("/game-sessions/end", (req, res) => {
   });
 });
 
+// =====================================================
+// SOCKET.IO CONNECTION HANDLER
+// =====================================================
+// Setiap player yang terhubung akan memiliki satu socket.
+// Semua event realtime dari client diproses di dalam connection handler ini.
 io.on("connection", async (socket) => {
   console.log("USER CONNECT:", socket.id);
+
+    // =====================================================
+  // AUTH PLAYER
+  // =====================================================
+  // Client mengirim data session setelah socket connect.
+  // Server menyimpan data user berdasarkan socket.id agar event berikutnya
+  // dapat dikenali sebagai milik player tertentu.
   socket.on("auth", async (data) => {
     if (!data.userId || !data.sessionToken) {
       console.log("❌ AUTH INVALID");
@@ -532,14 +669,8 @@ io.on("connection", async (socket) => {
 console.log("🔥 AUTH MASUK:");
 console.log(data);
 
-// =========================
-// CEK RESULT TELAT
-// =========================
-// Case:
-// P1 disconnect, P2 tetap online,
-// P1 timeout, P2 menang,
-// lalu P1 baru connect lagi.
-// Maka P1 harus masuk Result kalah.
+// Mengecek apakah player ini sebelumnya kalah karena disconnect timeout.
+// Jika ada data matchResult, server mengirim lateGameResult agar client masuk Result kalah.
 const lateResultData = await pubClient.get(`matchResult:${data.userId}`);
 
 if (lateResultData) {
@@ -552,14 +683,8 @@ if (lateResultData) {
   return;
 }
 
-// =========================
-// CEK MATCH EXPIRED / ABANDONED
-// =========================
-// Case:
-// P1 dan P2 sama-sama disconnect,
-// tidak ada yang balik sampai timeout.
-// Match invalid, tidak submit score,
-// player balik ke MainMenu.
+// Mengecek apakah match sebelumnya expired karena dua player sama-sama disconnect.
+// Jika ada data matchExpired, client diarahkan ke MainMenu dengan notifikasi match expired.
 const expiredData = await pubClient.get(`matchExpired:${data.userId}`);
 
 if (expiredData) {
@@ -572,6 +697,8 @@ if (expiredData) {
   return;
 }
 
+// Jika tidak ada late result atau expired match,
+// server mengecek apakah player ini sedang reconnect ke room aktif.
 for (const code in rooms) {
   let room = await getRoom(code);
   if (!room) continue;
@@ -637,6 +764,11 @@ for (const code in rooms) {
 }
   });
 
+    // =====================================================
+  // CREATE ROOM
+  // =====================================================
+  // Membuat room private menggunakan kode room.
+  // Player pembuat room akan menjadi host.
   socket.on("createRoom", async () => {
     const roomCount = Object.keys(rooms).length;
 
@@ -677,6 +809,11 @@ for (const code in rooms) {
     socket.emit("roomCreated", code);
   });
 
+    // =====================================================
+  // JOIN ROOM
+  // =====================================================
+  // Guest masuk ke room private menggunakan kode room.
+  // Jika room valid dan belum penuh, kedua player diarahkan ke fase placement.
   socket.on("joinRoom", async (code) => {
     let room = await getRoom(code);
 
@@ -709,6 +846,11 @@ for (const code in rooms) {
     }, 500);
   });
 
+    // =====================================================
+  // FIND MATCH / RANDOM MATCHMAKING
+  // =====================================================
+  // Player masuk ke queue matchmaking.
+  // Jika ada dua player dalam queue, server membuat room otomatis.
   socket.on("findMatch", () => {
     if (!connectedUsers[socket.id]) {
       console.log("❌ SOCKET BELUM AUTH");
@@ -733,6 +875,10 @@ for (const code in rooms) {
     tryMatch();
   });
 
+    // =====================================================
+  // TRY MATCH
+  // =====================================================
+  // Mengambil dua player dari matchmakingQueue dan memasangkannya ke room baru.
   async function tryMatch() {
     if (!GAME_CONFIG) {
       console.log("❌ CONFIG BELUM MASUK (MATCH)");
@@ -789,6 +935,10 @@ for (const code in rooms) {
     }
   }
 
+    // =====================================================
+  // CANCEL MATCH
+  // =====================================================
+  // Menghapus player dari queue matchmaking dan mengeluarkannya dari room sementara.
   socket.on("cancelMatch", () => {
     for (const r of socket.rooms) {
       if (r !== socket.id) {
@@ -804,6 +954,12 @@ for (const code in rooms) {
 
     console.log("❌ CANCEL MATCH:", socket.id);
   });
+
+    // =====================================================
+  // PLAYER READY / SAVE SHIPS
+  // =====================================================
+  // Client mengirim posisi kapal setelah fase placement.
+  // Jika dua player sudah ready, server memulai battle.
   socket.on("playerReady", async ({ roomCode, ships }) => {
     if (!connectedUsers[socket.id]) {
       console.log("❌ SOCKET BELUM AUTH");
@@ -844,6 +1000,10 @@ for (const code in rooms) {
     await saveRoom(roomCode, room);
   });
 
+    // =====================================================
+  // ATTACK HANDLER
+  // =====================================================
+  // Server memproses serangan player secara authoritative.
   socket.on("attack", async ({ roomCode, x, y, width, height }) => {
     if (!connectedUsers[socket.id]) {
       console.log("❌ SOCKET BELUM AUTH");
@@ -1082,6 +1242,12 @@ for (const code in rooms) {
     }
   });
 
+  // =====================================================
+// DISCONNECT HANDLER
+// =====================================================
+// Handler ini menangani player yang putus koneksi.
+// Jika hanya satu player disconnect, server memberi waktu reconnect.
+// Jika dua player disconnect, server menunggu lebih lama sebelum match abandoned.
 socket.on("disconnect", async () => {
   console.log("❌ DISCONNECT:", socket.id);
 
@@ -1154,6 +1320,11 @@ socket.on("disconnect", async () => {
   delete connectedUsers[socket.id];
 });
 
+  // =====================================================
+  // SYNC CONFIG
+  // =====================================================
+  // Client mengirim config gameplay ke server.
+  // Server menyimpan turn_time, placement_time, cooldown, dan score rule ke GAME_CONFIG.
   socket.on("syncConfig", (config) => {
     console.log("🔥 CONFIG MASUK DARI CLIENT:", config);
 
@@ -1185,6 +1356,12 @@ socket.on("disconnect", async () => {
     });
   });
 });
+
+// =====================================================
+// START SERVER
+// =====================================================
+// Fungsi ini menghubungkan Redis, memasang Redis adapter untuk Socket.IO,
+// lalu menjalankan HTTP server pada port 3000.
 async function startServer() {
   try {
     await pubClient.connect();

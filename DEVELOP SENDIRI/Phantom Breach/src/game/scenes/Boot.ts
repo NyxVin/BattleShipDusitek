@@ -62,6 +62,31 @@ socket.on("reconnectSuccess", (data: any) => {
   this.registry.set("pendingReconnect", data);
 });
 
+if (!this.registry.get("matchExpiredListenerReady")) {
+  this.registry.set("matchExpiredListenerReady", true);
+
+  window.addEventListener("matchExpired", (event: any) => {
+    console.log("⚠️ MATCH EXPIRED UI:", event.detail);
+
+    this.registry.set("matchExpiredNotice", {
+      title: "MATCH EXPIRED",
+      message: "Kedua pemain terputus terlalu lama.\nMatch ini dianggap tidak valid.",
+      subMessage: "Skor tidak dikirim.",
+      reason: event.detail?.reason || "BOTH_PLAYERS_DISCONNECTED",
+    });
+
+    this.registry.remove("pendingReconnect");
+    this.registry.remove("pendingLateGameResult");
+    this.registry.remove("roomCode");
+
+    this.game.scene.stop("MainGame");
+    this.game.scene.stop("Placement");
+    this.game.scene.stop("Result");
+
+    this.game.scene.start("MainMenu");
+  });
+}
+
 if (!this.registry.get("lateGameResultListenerReady")) {
   this.registry.set("lateGameResultListenerReady", true);
 

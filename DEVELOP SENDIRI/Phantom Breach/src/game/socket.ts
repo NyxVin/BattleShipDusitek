@@ -1,8 +1,11 @@
 import { io } from "socket.io-client";
 import { SessionManager } from "../session/sessionManager";
 
+// File ini mengatur koneksi socket client ke server game.
 const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 export let isAuthenticated = false;
+
+// Mengambil alamat server dari environment.
 export const socket = io(SERVER_URL, {
   reconnection: true,
   reconnectionAttempts: Infinity,
@@ -12,6 +15,7 @@ export const socket = io(SERVER_URL, {
 });
 console.log("SERVER URL:", SERVER_URL);
 
+// Membuat koneksi Socket.IO, tapi belum langsung connect.
 socket.on("connect", () => {
 
   console.log("🔥 SOCKET CONNECT:", socket.id);
@@ -26,6 +30,7 @@ socket.on("connect", () => {
   });
 });
 
+// Saat socket berhasil connect, client langsung mengirim data auth ke server.
 socket.on("authSuccess", () => {
 
   console.log("✅ AUTH SUCCESS");
@@ -33,16 +38,17 @@ socket.on("authSuccess", () => {
   isAuthenticated = true;
 });
 
-// 🔥 RECONNECT
+// Server memberi tanda bahwa auth berhasil.
 socket.on("reconnect", () => {
   console.log("✅ SOCKET RECONNECT BERHASIL");
 });
 
-// 🔥 DISCONNECT
+// Dipanggil saat socket berhasil reconnect.
 socket.on("disconnect", (reason) => {
   console.log("❌ SOCKET DISCONNECT:", reason);
 });
 
+// Dipanggil saat koneksi socket terputus.
 socket.on("matchExpired", (data) => {
   console.log("⚠️ MATCH EXPIRED:", data);
 
@@ -53,6 +59,8 @@ socket.on("matchExpired", (data) => {
   );
 });
 
+// Event saat match invalid karena dua player disconnect terlalu lama.
+// Event saat player yang kalah karena disconnect masuk lagi ke game.
 socket.on("lateGameResult", (data) => {
   console.log("🏁 LATE GAME RESULT:", data);
 
