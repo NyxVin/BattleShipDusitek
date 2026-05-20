@@ -37,6 +37,8 @@ export class Game extends Scene {
   roomCode: string = "";
   shipRects: Phaser.GameObjects.Rectangle[] = [];
   selfShipImages: Phaser.GameObjects.Image[] = [];
+  enemyShipImages: Phaser.GameObjects.Image[] = [];
+  revealedEnemyShipIndexes = new Set<number>();
   previewRects: Phaser.GameObjects.Rectangle[] = [];
   targetMarks: Phaser.GameObjects.Image[] = [];
   gameData: any;
@@ -65,11 +67,11 @@ export class Game extends Scene {
     const cfg = this.registry.get("gameConfig");
     this.turnTime = cfg.turn_time;
     const cooldowns: any = {
-  spaceship1: cfg.cooldown_spaceship1 ?? 0,
-  spaceship2: cfg.cooldown_spaceship2 ?? 3,
-  spaceship3: cfg.cooldown_spaceship3 ?? 0,
-  spaceship4: cfg.cooldown_spaceship4 ?? 2,
-};
+      spaceship1: cfg.cooldown_spaceship1 ?? 0,
+      spaceship2: cfg.cooldown_spaceship2 ?? 3,
+      spaceship3: cfg.cooldown_spaceship3 ?? 0,
+      spaceship4: cfg.cooldown_spaceship4 ?? 2,
+    };
 
     this.shipsUI.forEach((ship) => {
       ship.cooldown = cooldowns?.[ship.key] ?? ship.cooldown;
@@ -213,49 +215,37 @@ export class Game extends Scene {
       .setScale(0.3)
       .setAlpha(0);
 
-      // =====================================================
-// POPUP GILIRAN PERTAMA SAAT BARU MASUK BATTLE
-// =====================================================
-const initialTurn =
-  this.gameData?.currentTurn ||
-  this.gameData?.room?.currentTurn ||
-  null;
+    // =====================================================
+    // POPUP GILIRAN PERTAMA SAAT BARU MASUK BATTLE
+    // =====================================================
+    const initialTurn = this.gameData?.currentTurn || this.gameData?.room?.currentTurn || null;
 
-const initialTimeLeft =
-  this.gameData?.timeLeft ||
-  this.gameData?.room?.timeLeft ||
-  this.turnTime;
+    const initialTimeLeft = this.gameData?.timeLeft || this.gameData?.room?.timeLeft || this.turnTime;
 
-console.log("🔥 INITIAL TURN DI MAIN GAME:", {
-  initialTurn,
-  myId: SessionManager.sessionId,
-  isMyTurn: String(initialTurn) === String(SessionManager.sessionId),
-});
+    console.log("🔥 INITIAL TURN DI MAIN GAME:", {
+      initialTurn,
+      myId: SessionManager.sessionId,
+      isMyTurn: String(initialTurn) === String(SessionManager.sessionId),
+    });
 
-if (initialTurn) {
-  this.isMyTurn = String(initialTurn) === String(SessionManager.sessionId);
-  this.turnTime = initialTimeLeft;
+    if (initialTurn) {
+      this.isMyTurn = String(initialTurn) === String(SessionManager.sessionId);
+      this.turnTime = initialTimeLeft;
 
-  if (this.timerText && this.timerText.active) {
-    this.timerText.setText(initialTimeLeft + "s");
-  }
+      if (this.timerText && this.timerText.active) {
+        this.timerText.setText(initialTimeLeft + "s");
+      }
 
-  this.time.delayedCall(500, () => {
-    if (!this.scene.isActive()) return;
+      this.time.delayedCall(500, () => {
+        if (!this.scene.isActive()) return;
 
-    if (this.isMyTurn) {
-      this.showTurnPopup(
-        cfg.text_turn,
-        cfg.color_turn
-      );
-    } else {
-      this.showTurnPopup(
-        cfg.text_enemy,
-        cfg.color_enemy
-      );
+        if (this.isMyTurn) {
+          this.showTurnPopup(cfg.text_turn, cfg.color_turn);
+        } else {
+          this.showTurnPopup(cfg.text_enemy, cfg.color_enemy);
+        }
+      });
     }
-  });
-}
 
     if (this.gameData && this.gameData.ships) {
       const myId = SessionManager.sessionId;
@@ -289,15 +279,15 @@ if (initialTurn) {
     this.shipsUI.forEach((ship, i) => {
       const x = startXCard + i * (cardSize + gap) + cardSize / 2;
       const container = this.add.container(x, cardY);
-const bg = this.add.image(0, -10, "card_unit").setDisplaySize(cardSize, 80);
+      const bg = this.add.image(0, -10, "card_unit").setDisplaySize(cardSize, 80);
 
-const shipIcon = this.add.image(0, -18, ship.key);
+      const shipIcon = this.add.image(0, -18, ship.key);
 
-const maxW = 50;
-const maxH = 32;
-const scale = Math.min(maxW / shipIcon.width, maxH / shipIcon.height);
+      const maxW = 50;
+      const maxH = 32;
+      const scale = Math.min(maxW / shipIcon.width, maxH / shipIcon.height);
 
-shipIcon.setScale(scale);
+      shipIcon.setScale(scale);
 
       const cdText = this.add
         .text(0, 38, "", {
@@ -440,58 +430,47 @@ shipIcon.setScale(scale);
 
       this.attack(); // 🔥 PINDAH KE SINI
     });
-        socket.off("game_tick");
+    socket.off("game_tick");
     socket.off("attackResult");
     socket.off("attackInvalid");
     socket.off("gameOver");
     socket.off("updateScore");
 
-    let lastTurn =
-      this.gameData?.room?.currentTurn ||
-      this.gameData?.currentTurn ||
-      "";
+    let lastTurn = this.gameData?.room?.currentTurn || this.gameData?.currentTurn || "";
 
+    socket.on("game_tick", (data) => {
+      if (!this.timerText || !this.timerText.active) return;
+      if (!data || !data.currentTurn) return;
 
+      this.timerText.setText(data.timeLeft + "s");
 
-socket.on("game_tick", (data) => {
-  if (!this.timerText || !this.timerText.active) return;
-  if (!data || !data.currentTurn) return;
+      const prevTurn = lastTurn;
+      lastTurn = data.currentTurn;
 
-  this.timerText.setText(data.timeLeft + "s");
+      this.isMyTurn = String(data.currentTurn) === String(SessionManager.sessionId);
+      this.turnTime = data.timeLeft;
 
-  const prevTurn = lastTurn;
-  lastTurn = data.currentTurn;
+      if (prevTurn !== data.currentTurn) {
+        if (this.isMyTurn) {
+          this.shipsUI.forEach((ship) => {
+            if (ship.cooldownActive && ship.cooldownLeft > 0) {
+              ship.cooldownLeft--;
 
-  this.isMyTurn = String(data.currentTurn) === String(SessionManager.sessionId);
-  this.turnTime = data.timeLeft;
+              if (ship.cooldownLeft <= 0) {
+                ship.cooldownLeft = 0;
+                ship.cooldownActive = false;
+              }
+            }
+          });
 
-  if (prevTurn !== data.currentTurn) {
-    if (this.isMyTurn) {
-      this.shipsUI.forEach((ship) => {
-        if (ship.cooldownActive && ship.cooldownLeft > 0) {
-          ship.cooldownLeft--;
-
-          if (ship.cooldownLeft <= 0) {
-            ship.cooldownLeft = 0;
-            ship.cooldownActive = false;
-          }
+          this.showTurnPopup(cfg.text_turn, cfg.color_turn);
+        } else {
+          this.showTurnPopup(cfg.text_enemy, cfg.color_enemy);
         }
-      });
+      }
+    });
 
-      this.showTurnPopup(
-        cfg.text_turn,
-        cfg.color_turn
-      );
-    } else {
-      this.showTurnPopup(
-        cfg.text_enemy,
-        cfg.color_enemy
-      );
-    }
-  }
-});
-
-    socket.on("attackResult", ({ cells, target, attackerId }) => {
+    socket.on("attackResult", ({ cells, attackerId, sunkShips = [] }) => {
       if (!cells || cells.length === 0) {
         console.warn("⚠️ CELLS KOSONG");
         this.isAnimating = false;
@@ -610,24 +589,35 @@ socket.on("game_tick", (data) => {
             pending--;
 
             if (pending === 0 && !soundPlayed) {
+              if (attackerId === SessionManager.sessionId && Array.isArray(sunkShips)) {
+                sunkShips.forEach((ship: any) => {
+                  this.renderEnemySunkShip(ship);
+                });
+              }
+
               if (attackerId === SessionManager.sessionId) {
-                if (attackerId === SessionManager.sessionId) {
-                  const ship = this.shipsUI[this.lastUsedShipIndex];
+                const ship = this.shipsUI[this.lastUsedShipIndex];
 
-                  if (ship && ship.cooldown > 0) {
-                    ship.cooldownActive = true;
-                    ship.cooldownLeft = ship.cooldown;
-                  }
-
-                  this.lastUsedShipIndex = -1;
+                if (ship && ship.cooldown > 0) {
+                  ship.cooldownActive = true;
+                  ship.cooldownLeft = ship.cooldown;
                 }
+
+                this.lastUsedShipIndex = -1;
               }
+
               soundPlayed = true;
+
               if (isAnyHit) {
-                this.sfx.explosion.play({ volume: attackerId === SessionManager.sessionId ? 0.6 : 0.4 });
+                this.sfx.explosion.play({
+                  volume: attackerId === SessionManager.sessionId ? 0.6 : 0.4,
+                });
               } else {
-                this.sfx.waterboom.play({ volume: attackerId === SessionManager.sessionId ? 0.9 : 0.5 });
+                this.sfx.waterboom.play({
+                  volume: attackerId === SessionManager.sessionId ? 0.9 : 0.5,
+                });
               }
+
               this.isAnimating = false;
 
               if (this.pendingGameOver) {
@@ -861,59 +851,84 @@ socket.on("game_tick", (data) => {
     cell.attacked = true; // 🔥 WAJIB
   }
 
-renderShips(ships: any[]) {
-  // Hapus render kapal lama supaya tidak double
-  this.selfShipImages.forEach((img) => img.destroy());
-  this.selfShipImages = [];
+  renderEnemySunkShip(ship: any) {
+    if (ship.shipIndex !== undefined && this.revealedEnemyShipIndexes.has(ship.shipIndex)) {
+      return;
+    }
 
-  ships.forEach((ship) => {
+    if (ship.shipIndex !== undefined) {
+      this.revealedEnemyShipIndexes.add(ship.shipIndex);
+    }
+
     const w = ship.vertical ? ship.height : ship.width;
     const h = ship.vertical ? ship.width : ship.height;
 
     const shipW = w * this.cellSize;
     const shipH = h * this.cellSize;
 
-    const selfStartY = this.enemyStartY + this.cellSize * this.ROWS + 20;
-
     const centerXShip = this.startX + ship.x * this.cellSize + shipW / 2;
-    const centerYShip = selfStartY + ship.y * this.cellSize + shipH / 2;
 
-    // Fallback kalau data lama belum punya key
-    const textureKey =
-      ship.key ||
-      (ship.width === 1 && ship.height === 1
-        ? "spaceship1"
-        : ship.width === 2 && ship.height === 2
-        ? "spaceship2"
-        : ship.width === 2 && ship.height === 1
-        ? "spaceship3"
-        : "spaceship4");
+    const centerYShip = this.enemyStartY + ship.y * this.cellSize + shipH / 2;
 
-    const shipImage = this.add
-      .image(centerXShip, centerYShip, textureKey)
-      .setDepth(4);
+    const textureKey = ship.key || (ship.width === 1 && ship.height === 1 ? "spaceship1" : ship.width === 2 && ship.height === 2 ? "spaceship2" : ship.width === 2 && ship.height === 1 ? "spaceship3" : "spaceship4");
 
-    // Kalau kapal di-rotate saat placement, di battle ikut rotate
+    const shipImage = this.add.image(centerXShip, centerYShip, textureKey).setDepth(1500).setAlpha(0.9);
+
     if (ship.vertical) {
       shipImage.setRotation(Math.PI / 2);
     } else {
       shipImage.setRotation(0);
     }
 
-    // Scale aman, tidak gepeng
     const rawW = ship.vertical ? shipImage.height : shipImage.width;
     const rawH = ship.vertical ? shipImage.width : shipImage.height;
 
-    const scale = Math.min(
-      (shipW * 0.88) / rawW,
-      (shipH * 0.88) / rawH
-    );
+    const scale = Math.min((shipW * 0.88) / rawW, (shipH * 0.88) / rawH);
 
     shipImage.setScale(scale);
 
-    this.selfShipImages.push(shipImage);
-  });
-}
+    this.enemyShipImages.push(shipImage);
+  }
+  renderShips(ships: any[]) {
+    // Hapus render kapal lama supaya tidak double
+    this.selfShipImages.forEach((img) => img.destroy());
+    this.selfShipImages = [];
+
+    ships.forEach((ship) => {
+      const w = ship.vertical ? ship.height : ship.width;
+      const h = ship.vertical ? ship.width : ship.height;
+
+      const shipW = w * this.cellSize;
+      const shipH = h * this.cellSize;
+
+      const selfStartY = this.enemyStartY + this.cellSize * this.ROWS + 20;
+
+      const centerXShip = this.startX + ship.x * this.cellSize + shipW / 2;
+      const centerYShip = selfStartY + ship.y * this.cellSize + shipH / 2;
+
+      // Fallback kalau data lama belum punya key
+      const textureKey = ship.key || (ship.width === 1 && ship.height === 1 ? "spaceship1" : ship.width === 2 && ship.height === 2 ? "spaceship2" : ship.width === 2 && ship.height === 1 ? "spaceship3" : "spaceship4");
+
+      const shipImage = this.add.image(centerXShip, centerYShip, textureKey).setDepth(4);
+
+      // Kalau kapal di-rotate saat placement, di battle ikut rotate
+      if (ship.vertical) {
+        shipImage.setRotation(Math.PI / 2);
+      } else {
+        shipImage.setRotation(0);
+      }
+
+      // Scale aman, tidak gepeng
+      const rawW = ship.vertical ? shipImage.height : shipImage.width;
+      const rawH = ship.vertical ? shipImage.width : shipImage.height;
+
+      const scale = Math.min((shipW * 0.88) / rawW, (shipH * 0.88) / rawH);
+
+      shipImage.setScale(scale);
+
+      this.selfShipImages.push(shipImage);
+    });
+  }
 
   showPreview(x: number, y: number) {
     if (this.selectedCell !== null || this.targetMarks.length > 0) return;
@@ -1006,7 +1021,7 @@ renderShips(ships: any[]) {
 
     this.time.removeAllEvents();
 
-    const myScore = scores[SessionManager.sessionId]|| {
+    const myScore = scores[SessionManager.sessionId] || {
       totalAttack: 0,
       hitCount: 0,
       missCount: 0,

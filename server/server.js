@@ -1198,6 +1198,8 @@ io.on("connection", async (socket) => {
       }
       if (!room.hits) room.hits = {};
       if (!room.hits[enemy]) room.hits[enemy] = [];
+      if (!room.sunkShips) room.sunkShips = {};
+      if (!room.sunkShips[enemy]) room.sunkShips[enemy] = [];
 
       if (!room.attackedCells) room.attackedCells = {};
       if (!room.attackedCells[enemy]) room.attackedCells[enemy] = [];
@@ -1291,12 +1293,55 @@ io.on("connection", async (socket) => {
         return total;
       }
 
+      const sunkShips = [];
+
+      for (let shipIndex = 0; shipIndex < enemyShips.length; shipIndex++) {
+        const ship = enemyShips[shipIndex];
+
+        if (room.sunkShips[enemy].includes(shipIndex)) {
+          continue;
+        }
+
+        const w = ship.vertical ? ship.height : ship.width;
+        const h = ship.vertical ? ship.width : ship.height;
+
+        let isSunk = true;
+
+        for (let i = 0; i < w; i++) {
+          for (let j = 0; j < h; j++) {
+            const sx = ship.x + i;
+            const sy = ship.y + j;
+            const key = `${sx},${sy}`;
+
+            if (!room.hits[enemy].includes(key)) {
+              isSunk = false;
+              break;
+            }
+          }
+
+          if (!isSunk) break;
+        }
+
+        if (isSunk) {
+          room.sunkShips[enemy].push(shipIndex);
+
+          sunkShips.push({
+            ...ship,
+            shipIndex,
+          });
+        }
+      }
+
+      await saveRoom(roomCode, room);
+
       const enemyDestroyed = isAllShipsDestroyed(enemyShips, room.hits[enemy]);
 
       io.to(roomCode).emit("attackResult", {
-        cells: results,
-        attackerId: player,
-      });
+  cells: results,
+  attackerId: player,
+  sunkShips,
+});
+
       if (enemyDestroyed) {
         if (roomIntervals[roomCode]) {
           clearInterval(roomIntervals[roomCode]);
