@@ -8,7 +8,6 @@ export function getSavedMuteState() {
 
 export function applySoundState(scene: Phaser.Scene) {
   const muted = getSavedMuteState();
-
   scene.sound.mute = muted;
   scene.registry.set("soundMuted", muted);
 
