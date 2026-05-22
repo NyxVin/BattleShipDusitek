@@ -17,6 +17,7 @@ export function endSession() {
     }
   );
 
+  
   // Dipanggil saat player keluar atau menutup game.
   // sendBeacon tetap bisa mengirim data walaupun halaman sedang ditutup.
   navigator.sendBeacon(
