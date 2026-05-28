@@ -901,7 +901,7 @@ io.on("connection", async (socket) => {
   // Membuat room private menggunakan kode room.
   // Player pembuat room akan menjadi host.
   socket.on("createRoom", async () => {
-    const user = connectedUsers[socket.id];==
+    const user = connectedUsers[socket.id];
 
     if (!user) {
       console.log("❌ CREATE ROOM DITOLAK: SOCKET BELUM AUTH");
