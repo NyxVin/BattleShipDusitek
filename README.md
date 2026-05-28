@@ -1,158 +1,777 @@
-# Phaser Vite TypeScript Template
+# 🎮 Phantom Breach
 
-This is a Phaser 3 project template that uses Vite for bundling. It supports hot-reloading for quick development workflow, includes TypeScript support and scripts to generate production-ready builds.
+**Phantom Breach** adalah game multiplayer berbasis web dengan konsep pertempuran battle ship secara real-time. Pemain akan menempatkan battle ship pada board masing-masing, lalu bergantian menyerang board lawan hingga seluruh battle ship musuh berhasil dihancurkan.
 
-**[This Template is also available as a JavaScript version.](https://github.com/phaserjs/template-vite)**
+Project ini menggunakan **Phaser** sebagai game engine, **Vite** sebagai frontend development server, serta **Node.js, Express, Socket.IO, Redis, dan Socket.IO Redis Adapter** untuk backend multiplayer real-time.
 
-### Versions
+---
 
-This template has been updated for:
+## 📌 Table of Contents
 
-- [Phaser 3.90.0](https://github.com/phaserjs/phaser)
-- [Vite 6.3.1](https://github.com/vitejs/vite)
-- [TypeScript 5.7.2](https://github.com/microsoft/TypeScript)
+* [Requirements](#-requirements)
+* [Installation](#-installation)
+* [Setup Redis Windows](#-setup-redis-windows)
+* [Setup Environment](#-setup-environment)
+* [Running Game](#-running-game)
+* [Build](#-build)
+* [Project Structure](#-project-structure)
+* [Dependencies](#-dependencies)
+* [Troubleshooting](#-troubleshooting)
+* [Notes](#-notes)
 
-![screenshot](screenshot.png)
+---
 
-## Requirements
+## 💻 Requirements
 
-[Node.js](https://nodejs.org) is required to install dependencies and run scripts via `npm`.
+Sebelum menjalankan game, pastikan laptop/PC sudah menginstall software berikut:
 
-## Available Commands
+| Software           | Fungsi                                                       |
+| ------------------ | ------------------------------------------------------------ |
+| **Node.js**        | Menjalankan frontend dan backend JavaScript                  |
+| **npm**            | Menginstall dependency project                               |
+| **Git**            | Clone repository project                                     |
+| **Docker Desktop** | Menjalankan Redis Server di Windows                          |
+| **Redis Server**   | Menyimpan data room sementara dan mendukung sistem reconnect |
+| **Browser Modern** | Menjalankan game, seperti Chrome, Edge, atau Firefox         |
 
-| Command | Description |
-|---------|-------------|
-| `npm install` | Install project dependencies |
-| `npm run dev` | Launch a development web server |
-| `npm run build` | Create a production build in the `dist` folder |
-| `npm run dev-nolog` | Launch a development web server without sending anonymous data (see "About log.js" below) |
-| `npm run build-nolog` | Create a production build in the `dist` folder without sending anonymous data (see "About log.js" below) |
-
-## Writing Code
-
-After cloning the repo, run `npm install` from your project directory. Then, you can start the local development server by running `npm run dev`.
-
-The local development server runs on `http://localhost:8080` by default. Please see the Vite documentation if you wish to change this, or add SSL support.
-
-Once the server is running you can edit any of the files in the `src` folder. Vite will automatically recompile your code and then reload the browser.
-
-## Template Project Structure
-
-We have provided a default project structure to get you started. This is as follows:
-
-## Template Project Structure
-
-We have provided a default project structure to get you started:
-
-| Path                         | Description                                                |
-|------------------------------|------------------------------------------------------------|
-| `index.html`                 | A basic HTML page to contain the game.                     |
-| `public/assets`              | Game sprites, audio, etc. Served directly at runtime.      |
-| `public/style.css`           | Global layout styles.                                      |
-| `src/main.ts`                | Application bootstrap.                                     |
-| `src/game`                   | Folder containing the game code.                           |
-| `src/game/main.ts`           | Game entry point: configures and starts the game.          |
-| `src/game/scenes`            | Folder with all Phaser game scenes.                        | 
-
-
-## Handling Assets
-
-Vite supports loading assets via JavaScript module `import` statements.
-
-This template provides support for both embedding assets and also loading them from a static folder. To embed an asset, you can import it at the top of the JavaScript file you are using it in:
-
-```js
-import logoImg from './assets/logo.png'
-```
-
-To load static files such as audio files, videos, etc place them into the `public/assets` folder. Then you can use this path in the Loader calls within Phaser:
-
-```js
-preload ()
-{
-    //  This is an example of an imported bundled image.
-    //  Remember to import it at the top of this file
-    this.load.image('logo', logoImg);
-
-    //  This is an example of loading a static image
-    //  from the public/assets folder:
-    this.load.image('background', 'assets/bg.png');
-}
-```
-
-When you issue the `npm run build` command, all static assets are automatically copied to the `dist/assets` folder.
-
-## Deploying to Production
-
-After you run the `npm run build` command, your code will be built into a single bundle and saved to the `dist` folder, along with any other assets your project imported, or stored in the public assets folder.
-
-In order to deploy your game, you will need to upload *all* of the contents of the `dist` folder to a public facing web server.
-
-## Customizing the Template
-
-### Vite
-
-If you want to customize your build, such as adding plugin (i.e. for loading CSS or fonts), you can modify the `vite/config.*.mjs` file for cross-project changes, or you can modify and/or create new configuration files and target them in specific npm tasks inside of `package.json`. Please see the [Vite documentation](https://vitejs.dev/) for more information.
-
-## About log.js
-
-If you inspect our node scripts you will see there is a file called `log.js`. This file makes a single silent API call to a domain called `gryzor.co`. This domain is owned by Phaser Studio Inc. The domain name is a homage to one of our favorite retro games.
-
-We send the following 3 pieces of data to this API: The name of the template being used (vue, react, etc). If the build was 'dev' or 'prod' and finally the version of Phaser being used.
-
-At no point is any personal data collected or sent. We don't know about your project files, device, browser or anything else. Feel free to inspect the `log.js` file to confirm this.
-
-Why do we do this? Because being open source means we have no visible metrics about which of our templates are being used. We work hard to maintain a large and diverse set of templates for Phaser developers and this is our small anonymous way to determine if that work is actually paying off, or not. In short, it helps us ensure we're building the tools for you.
-
-However, if you don't want to send any data, you can use these commands instead:
-
-Dev:
+Cek Node.js dan npm:
 
 ```bash
-npm run dev-nolog
+node -v
+npm -v
 ```
 
-Build:
+Cek Git:
 
 ```bash
-npm run build-nolog
+git --version
 ```
 
-Or, to disable the log entirely, simply delete the file `log.js` and remove the call to it in the `scripts` section of `package.json`:
+Cek Docker:
 
-Before:
-
-```json
-"scripts": {
-    "dev": "node log.js dev & dev-template-script",
-    "build": "node log.js build & build-template-script"
-},
+```bash
+docker --version
 ```
 
-After:
+---
 
-```json
-"scripts": {
-    "dev": "dev-template-script",
-    "build": "build-template-script"
-},
+## ⚙️ Installation
+
+Clone repository project:
+
+```bash
+git clone <repository-url>
+cd Phantom-Breach
 ```
 
-Either of these will stop `log.js` from running. If you do decide to do this, please could you at least join our Discord and tell us which template you're using! Or send us a quick email. Either will be super-helpful, thank you.
+---
 
-## Join the Phaser Community!
+### 1. Install Dependency Frontend
 
-We love to see what developers like you create with Phaser! It really motivates us to keep improving. So please join our community and show-off your work 😄
+Jalankan perintah berikut pada folder utama project:
 
-**Visit:** The [Phaser website](https://phaser.io) and follow on [Phaser Twitter](https://twitter.com/phaser_)<br />
-**Play:** Some of the amazing games [#madewithphaser](https://twitter.com/search?q=%23madewithphaser&src=typed_query&f=live)<br />
-**Learn:** [API Docs](https://newdocs.phaser.io), [Support Forum](https://phaser.discourse.group/) and [StackOverflow](https://stackoverflow.com/questions/tagged/phaser-framework)<br />
-**Discord:** Join us on [Discord](https://discord.gg/phaser)<br />
-**Code:** 2000+ [Examples](https://labs.phaser.io)<br />
-**Read:** The [Phaser World](https://phaser.io/community/newsletter) Newsletter<br />
+```bash
+npm install
+```
 
-Created by [Phaser Studio](mailto:support@phaser.io). Powered by coffee, anime, pixels and love.
+Jika dependency frontend belum tersedia, install manual:
 
-The Phaser logo and characters are &copy; 2011 - 2025 Phaser Studio Inc.
+```bash
+npm install phaser socket.io-client axios
+```
 
-All rights reserved.
+Dependency frontend yang digunakan:
+
+| Dependency           | Fungsi                                                        |
+| -------------------- | ------------------------------------------------------------- |
+| **phaser**           | Game engine untuk scene, board, sprite, asset, dan gameplay   |
+| **socket.io-client** | Menghubungkan client game ke backend Socket.IO                |
+| **axios**            | Mengambil konfigurasi game dan mengirim hasil score/session   |
+| **vite**             | Menjalankan frontend secara lokal dan melakukan build project |
+
+---
+
+### 2. Install Dependency Backend
+
+Masuk ke folder server:
+
+```bash
+cd server
+npm install
+```
+
+Jika dependency backend belum tersedia, install manual:
+
+```bash
+npm install express socket.io redis @socket.io/redis-adapter cors
+```
+
+Dependency backend yang digunakan:
+
+| Dependency                   | Fungsi                                                      |
+| ---------------------------- | ----------------------------------------------------------- |
+| **express**                  | Membuat backend HTTP server                                 |
+| **socket.io**                | Mengatur komunikasi real-time antar player                  |
+| **redis**                    | Library Node.js untuk menghubungkan backend ke Redis Server |
+| **@socket.io/redis-adapter** | Menghubungkan Socket.IO dengan Redis                        |
+| **cors**                     | Mengatur akses request dari frontend ke backend             |
+
+> Catatan penting: `npm install redis` hanya menginstall library Redis untuk Node.js, bukan Redis Server. Redis Server tetap harus dijalankan secara terpisah menggunakan Docker Desktop di Windows.
+
+---
+
+## 🟥 Setup Redis Windows
+
+Pada Windows, Redis dijalankan menggunakan **Docker Desktop**.
+
+> Nama container Redis bebas. Pada dokumentasi ini digunakan contoh nama `phantom-redis`. Jika menggunakan nama lain, misalnya `phantom-branch`, kode game tidak perlu diubah selama port Redis tetap menggunakan `6379`.
+
+---
+
+### 1. Pastikan Docker Desktop Aktif
+
+Buka aplikasi **Docker Desktop**, lalu pastikan Docker sudah running.
+
+Cek melalui terminal PowerShell atau CMD:
+
+```bash
+docker --version
+```
+
+---
+
+### 2. Download Image Redis
+
+Jalankan perintah berikut:
+
+```bash
+docker pull redis
+```
+
+---
+
+### 3. Jalankan Redis Container
+
+Jalankan Redis pada port default `6379`:
+
+```bash
+docker run --name phantom-redis -p 6379:6379 -d redis
+```
+
+Jika ingin menggunakan nama container lain, contoh:
+
+```bash
+docker run --name phantom-branch -p 6379:6379 -d redis
+```
+
+Yang paling penting adalah bagian port berikut tetap sama:
+
+```bash
+-p 6379:6379
+```
+
+Selama port tersebut tidak berubah, backend tetap dapat terhubung ke Redis melalui:
+
+```bash
+redis://127.0.0.1:6379
+```
+
+Keterangan command:
+
+| Bagian Command         | Fungsi                                            |
+| ---------------------- | ------------------------------------------------- |
+| `docker run`           | Menjalankan container baru                        |
+| `--name phantom-redis` | Memberi nama container Redis                      |
+| `-p 6379:6379`         | Menghubungkan port Redis container ke port laptop |
+| `-d`                   | Menjalankan container di background               |
+| `redis`                | Image Redis yang digunakan                        |
+
+---
+
+### 4. Cek Redis Berjalan
+
+Cek container yang sedang aktif:
+
+```bash
+docker ps
+```
+
+Jika Redis berhasil berjalan, akan muncul container Redis yang sedang aktif.
+
+---
+
+### 5. Tes Koneksi Redis
+
+Jika menggunakan nama container `phantom-redis`:
+
+```bash
+docker exec -it phantom-redis redis-cli ping
+```
+
+Jika menggunakan nama container lain, misalnya `phantom-branch`:
+
+```bash
+docker exec -it phantom-branch redis-cli ping
+```
+
+Jika berhasil, output-nya:
+
+```bash
+PONG
+```
+
+Jika sudah muncul `PONG`, berarti Redis sudah aktif dan siap digunakan oleh backend game.
+
+---
+
+### 6. Menjalankan Redis Kembali
+
+Jika laptop direstart atau Docker dimatikan, Redis bisa dijalankan kembali dengan:
+
+```bash
+docker start phantom-redis
+```
+
+Jika nama container berbeda, sesuaikan nama containernya:
+
+```bash
+docker start phantom-branch
+```
+
+Cek ulang koneksi Redis:
+
+```bash
+docker exec -it phantom-redis redis-cli ping
+```
+
+Output yang benar:
+
+```bash
+PONG
+```
+
+---
+
+### 7. Menghentikan Redis
+
+Jika ingin menghentikan Redis:
+
+```bash
+docker stop phantom-redis
+```
+
+Jika nama container berbeda, sesuaikan nama containernya:
+
+```bash
+docker stop phantom-branch
+```
+
+---
+
+## 🔧 Setup Environment
+
+Pada folder utama project, pastikan terdapat file `.env`.
+
+Contoh konfigurasi jika backend berjalan di laptop yang sama:
+
+```env
+VITE_SERVER_URL=http://localhost:3000
+```
+
+Jika backend berjalan menggunakan IP tertentu, sesuaikan nilainya, contoh:
+
+```env
+VITE_SERVER_URL=http://172.31.128.1:3000
+```
+
+Backend game menggunakan Redis default:
+
+```bash
+redis://127.0.0.1:6379
+```
+
+Artinya backend akan mencari Redis pada:
+
+```bash
+Host: 127.0.0.1
+Port: 6379
+```
+
+Sebelum menjalankan backend, pastikan Redis Docker sudah aktif dan menghasilkan output:
+
+```bash
+PONG
+```
+
+---
+
+## 🚀 Running Game
+
+Untuk menjalankan game, gunakan tiga terminal berbeda:
+
+1. Terminal Redis
+2. Terminal Backend
+3. Terminal Frontend
+
+---
+
+### 1. Jalankan Redis
+
+Buka Docker Desktop terlebih dahulu, lalu jalankan Redis:
+
+```bash
+docker start phantom-redis
+```
+
+Cek koneksi Redis:
+
+```bash
+docker exec -it phantom-redis redis-cli ping
+```
+
+Output yang benar:
+
+```bash
+PONG
+```
+
+---
+
+### 2. Jalankan Backend Server
+
+Buka terminal baru:
+
+```bash
+cd server
+node server.js
+```
+
+Jika berhasil, backend akan berjalan pada:
+
+```bash
+http://localhost:3000
+```
+
+Backend harus menampilkan log bahwa Redis berhasil terhubung, misalnya:
+
+```bash
+Redis connected
+SERVER RUNNING ON 3000
+```
+
+---
+
+### 3. Jalankan Frontend Game
+
+Buka terminal baru pada folder utama project:
+
+```bash
+npm run dev
+```
+
+Pada project ini, frontend berjalan pada:
+
+```bash
+http://localhost:8080
+```
+
+Jika terminal Vite menampilkan port yang berbeda, gunakan alamat yang muncul pada bagian `Local`.
+
+Contoh output Vite:
+
+```bash
+Local: http://localhost:8080/
+```
+
+---
+
+### 4. Buka Game di Browser
+
+Untuk testing lokal, buka game dengan parameter session:
+
+```bash
+http://localhost:8080/?session_id=dev-player-1&session_token=dev-token-1&api_base_url=http://localhost:8000&event_slug=local-event&expires_at=2099-12-31T23:59:59Z
+```
+
+Untuk testing multiplayer, buka browser kedua atau incognito dengan `session_id` berbeda:
+
+```bash
+http://localhost:8080/?session_id=dev-player-2&session_token=dev-token-2&api_base_url=http://localhost:8000&event_slug=local-event&expires_at=2099-12-31T23:59:59Z
+```
+
+> Catatan: `api_base_url=http://localhost:8000` digunakan untuk koneksi ke CMS/API lokal. Jika CMS/API belum berjalan, game masih dapat terbuka, tetapi konfigurasi atau submit score ke CMS dapat gagal.
+
+---
+
+## 🛠 Build
+
+Build game untuk production:
+
+```bash
+npm run build
+```
+
+Preview hasil build:
+
+```bash
+npm run preview
+```
+
+Hasil build akan berada pada folder:
+
+```bash
+dist/
+```
+
+---
+
+## 📂 Project Structure
+
+```bash
+Phantom Breach/
+├── public/
+│   ├── assets/
+│   │   ├── sound/
+│   │   ├── spaceship1.png
+│   │   ├── spaceship2.png
+│   │   ├── spaceship3.png
+│   │   ├── spaceship4.png
+│   │   ├── hit.png
+│   │   ├── miss.png
+│   │   ├── bomb.png
+│   │   ├── target.png
+│   │   ├── tile_water.png
+│   │   └── asset game lainnya
+│   ├── fonts/
+│   ├── config.json
+│   ├── test.json
+│   ├── style.css
+│   └── favicon.png
+│
+├── src/
+│   ├── game/
+│   │   ├── config/
+│   │   │   ├── defaultConfig.ts
+│   │   │   ├── loadConfig.ts
+│   │   │   └── mergeConfig.ts
+│   │   ├── scenes/
+│   │   │   ├── Boot.ts
+│   │   │   ├── Preloader.ts
+│   │   │   ├── MainMenu.ts
+│   │   │   ├── Placement.ts
+│   │   │   ├── Game.ts
+│   │   │   └── Result.ts
+│   │   ├── services/
+│   │   │   └── configService.js
+│   │   ├── utils/
+│   │   │   └── SoundManager.ts
+│   │   ├── main.ts
+│   │   └── socket.ts
+│   │
+│   ├── session/
+│   │   ├── endSession.ts
+│   │   ├── sessionManager.ts
+│   │   └── submitScore.ts
+│   │
+│   ├── main.ts
+│   └── vite-env.d.ts
+│
+├── server/
+│   ├── server.js
+│   ├── roomManager.js
+│   ├── testClient.js
+│   ├── package.json
+│   └── package-lock.json
+│
+├── vite/
+│   ├── config.dev.mjs
+│   └── config.prod.mjs
+│
+├── .env
+├── index.html
+├── log.js
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+└── README.md
+```
+
+---
+
+## 🧩 Dependencies
+
+### Frontend
+
+| Package              | Keterangan                                |
+| -------------------- | ----------------------------------------- |
+| **phaser**           | Engine utama untuk menjalankan game       |
+| **socket.io-client** | Koneksi real-time dari client ke backend  |
+| **axios**            | Request konfigurasi game dan submit score |
+| **vite**             | Development server dan build frontend     |
+
+---
+
+### Backend
+
+| Package                      | Keterangan                                          |
+| ---------------------------- | --------------------------------------------------- |
+| **express**                  | Server HTTP backend                                 |
+| **socket.io**                | Server komunikasi real-time                         |
+| **redis**                    | Library untuk menghubungkan Node.js ke Redis Server |
+| **@socket.io/redis-adapter** | Adapter agar Socket.IO dapat menggunakan Redis      |
+| **cors**                     | Mengatur akses request dari frontend ke backend     |
+
+---
+
+### External Service
+
+| Service          | Keterangan                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------ |
+| **Redis Server** | Service eksternal yang wajib aktif agar backend dapat menyimpan state room sementara                   |
+| **CMS/API**      | Digunakan untuk mengambil konfigurasi game dan mengirim score jika project dihubungkan ke sistem utama |
+
+---
+
+## ❗ Troubleshooting
+
+### 1. Docker tidak dikenali
+
+Jika muncul error:
+
+```bash
+'docker' is not recognized
+```
+
+Artinya Docker Desktop belum terinstall atau belum berjalan.
+
+Solusi:
+
+1. Install Docker Desktop.
+2. Buka Docker Desktop.
+3. Tunggu sampai status Docker aktif.
+4. Jalankan ulang command:
+
+```bash
+docker --version
+```
+
+---
+
+### 2. Redis container belum dibuat
+
+Jika command ini gagal:
+
+```bash
+docker start phantom-redis
+```
+
+Berarti container Redis belum dibuat.
+
+Buat Redis container dengan:
+
+```bash
+docker run --name phantom-redis -p 6379:6379 -d redis
+```
+
+---
+
+### 3. Nama container Redis sudah digunakan
+
+Jika muncul error bahwa nama `phantom-redis` sudah digunakan, jalankan saja container yang sudah ada:
+
+```bash
+docker start phantom-redis
+```
+
+Jika ingin membuat ulang dari awal:
+
+```bash
+docker rm -f phantom-redis
+docker run --name phantom-redis -p 6379:6379 -d redis
+```
+
+---
+
+### 4. Redis connection refused
+
+Jika backend gagal connect ke Redis, cek apakah Redis aktif:
+
+```bash
+docker ps
+```
+
+Lalu tes Redis:
+
+```bash
+docker exec -it phantom-redis redis-cli ping
+```
+
+Output harus:
+
+```bash
+PONG
+```
+
+Jika belum aktif, jalankan:
+
+```bash
+docker start phantom-redis
+```
+
+---
+
+### 5. Module backend tidak ditemukan
+
+Jika muncul error seperti:
+
+```bash
+Cannot find module 'express'
+Cannot find module 'socket.io'
+Cannot find module 'redis'
+```
+
+Masuk ke folder server dan install dependency backend:
+
+```bash
+cd server
+npm install express socket.io redis @socket.io/redis-adapter cors
+```
+
+---
+
+### 6. Module frontend tidak ditemukan
+
+Jika muncul error seperti:
+
+```bash
+Cannot find module 'phaser'
+Cannot find module 'socket.io-client'
+Cannot find module 'axios'
+```
+
+Install dependency frontend:
+
+```bash
+npm install phaser socket.io-client axios
+```
+
+---
+
+### 7. Socket tidak connect ke backend
+
+Periksa file `.env`:
+
+```env
+VITE_SERVER_URL=http://localhost:3000
+```
+
+Jika backend berjalan pada IP lain, sesuaikan nilainya.
+
+Setelah mengubah `.env`, restart frontend:
+
+```bash
+npm run dev
+```
+
+---
+
+### 8. Halaman `localhost:8080` tidak bisa dibuka
+
+Jika browser menampilkan:
+
+```bash
+This site can't be reached
+ERR_CONNECTION_REFUSED
+```
+
+Artinya frontend Vite belum berjalan atau terminal `npm run dev` sudah tertutup.
+
+Jalankan kembali pada folder utama project:
+
+```bash
+npm run dev
+```
+
+Lalu buka alamat yang muncul pada output Vite, contoh:
+
+```bash
+http://localhost:8080
+```
+
+---
+
+### 9. Masih membuka `localhost:5173`
+
+Project ini berjalan pada port `8080`, bukan `5173`.
+
+Gunakan:
+
+```bash
+http://localhost:8080
+```
+
+Bukan:
+
+```bash
+http://localhost:5173
+```
+
+Jika Vite menampilkan port lain, gunakan port yang muncul di terminal.
+
+---
+
+### 10. Port 3000 sudah digunakan
+
+Jika backend gagal berjalan karena port `3000` sudah digunakan, hentikan proses yang memakai port tersebut atau ubah port pada `server.js`.
+
+---
+
+### 11. Port Redis 6379 sudah digunakan
+
+Jika Redis gagal berjalan karena port `6379` sudah digunakan, cek container yang aktif:
+
+```bash
+docker ps
+```
+
+Jika sudah ada Redis yang berjalan, gunakan container tersebut.
+
+Jika ingin membuat ulang:
+
+```bash
+docker rm -f phantom-redis
+docker run --name phantom-redis -p 6379:6379 -d redis
+```
+
+---
+
+### 12. Asset game tidak muncul
+
+Pastikan asset masih berada di folder:
+
+```bash
+public/assets/
+public/fonts/
+```
+
+Jangan menghapus atau mengubah nama asset yang sudah digunakan oleh scene game.
+
+---
+
+## 📝 Notes
+
+* Game membutuhkan frontend dan backend agar multiplayer dapat berjalan.
+* Redis wajib aktif sebelum menjalankan backend.
+* Redis di Windows dijalankan menggunakan Docker Desktop.
+* Nama container Redis bebas, selama port tetap `6379`.
+* Backend berjalan pada port `3000`.
+* Frontend pada project ini berjalan pada port `8080`.
+* Jika Vite menampilkan port berbeda, gunakan alamat yang muncul pada terminal.
+* Frontend membaca alamat backend dari file `.env`.
+* Untuk laptop yang sama, gunakan `VITE_SERVER_URL=http://localhost:3000`.
+* Untuk jaringan/IP tertentu, sesuaikan `VITE_SERVER_URL` dengan alamat backend.
+* Untuk testing multiplayer lokal, gunakan dua browser atau incognito dengan `session_id` berbeda.
+* Game dapat mengambil konfigurasi dari CMS menggunakan `api_base_url` dan `event_slug`.
+* Jika konfigurasi CMS gagal dimuat, game akan menggunakan konfigurasi default.
+* Submit score membutuhkan endpoint CMS/API yang aktif.
+* Folder `public/assets/` dan `public/fonts/` tidak boleh dihapus karena digunakan oleh game.
