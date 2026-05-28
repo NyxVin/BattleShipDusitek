@@ -6,7 +6,8 @@ Project ini menggunakan **Phaser** sebagai game engine, **Vite** sebagai fronten
 
 ---
 
-## 📌 Table 
+## 📌 Table of Contents
+
 * [Requirements](#-requirements)
 * [Installation](#-installation)
 * [Setup Redis Windows](#-setup-redis-windows)
@@ -123,6 +124,10 @@ Dependency backend yang digunakan:
 
 Pada Windows, Redis dijalankan menggunakan **Docker Desktop**.
 
+> Nama container Redis bebas. Pada dokumentasi ini digunakan contoh nama `phantom-redis`. Jika menggunakan nama lain, misalnya `phantom-branch`, kode game tidak perlu diubah selama port Redis tetap menggunakan `6379`.
+
+---
+
 ### 1. Pastikan Docker Desktop Aktif
 
 Buka aplikasi **Docker Desktop**, lalu pastikan Docker sudah running.
@@ -132,8 +137,6 @@ Cek melalui terminal PowerShell atau CMD:
 ```bash
 docker --version
 ```
-
-Jika Docker sudah aktif, lanjut ke tahap berikutnya.
 
 ---
 
@@ -153,6 +156,24 @@ Jalankan Redis pada port default `6379`:
 
 ```bash
 docker run --name phantom-redis -p 6379:6379 -d redis
+```
+
+Jika ingin menggunakan nama container lain, contoh:
+
+```bash
+docker run --name phantom-branch -p 6379:6379 -d redis
+```
+
+Yang paling penting adalah bagian port berikut tetap sama:
+
+```bash
+-p 6379:6379
+```
+
+Selama port tersebut tidak berubah, backend tetap dapat terhubung ke Redis melalui:
+
+```bash
+redis://127.0.0.1:6379
 ```
 
 Keterangan command:
@@ -175,20 +196,22 @@ Cek container yang sedang aktif:
 docker ps
 ```
 
-Jika Redis berhasil berjalan, akan muncul container dengan nama:
-
-```bash
-phantom-redis
-```
+Jika Redis berhasil berjalan, akan muncul container Redis yang sedang aktif.
 
 ---
 
 ### 5. Tes Koneksi Redis
 
-Jalankan:
+Jika menggunakan nama container `phantom-redis`:
 
 ```bash
 docker exec -it phantom-redis redis-cli ping
+```
+
+Jika menggunakan nama container lain, misalnya `phantom-branch`:
+
+```bash
+docker exec -it phantom-branch redis-cli ping
 ```
 
 Jika berhasil, output-nya:
@@ -209,7 +232,13 @@ Jika laptop direstart atau Docker dimatikan, Redis bisa dijalankan kembali denga
 docker start phantom-redis
 ```
 
-Cek ulang koneksi:
+Jika nama container berbeda, sesuaikan nama containernya:
+
+```bash
+docker start phantom-branch
+```
+
+Cek ulang koneksi Redis:
 
 ```bash
 docker exec -it phantom-redis redis-cli ping
@@ -229,6 +258,12 @@ Jika ingin menghentikan Redis:
 
 ```bash
 docker stop phantom-redis
+```
+
+Jika nama container berbeda, sesuaikan nama containernya:
+
+```bash
+docker stop phantom-branch
 ```
 
 ---
@@ -262,7 +297,7 @@ Host: 127.0.0.1
 Port: 6379
 ```
 
-Jadi sebelum menjalankan backend, pastikan Redis Docker sudah aktif dan menghasilkan output:
+Sebelum menjalankan backend, pastikan Redis Docker sudah aktif dan menghasilkan output:
 
 ```bash
 PONG
@@ -334,10 +369,18 @@ Buka terminal baru pada folder utama project:
 npm run dev
 ```
 
-Game akan berjalan pada:
+Pada project ini, frontend berjalan pada:
 
 ```bash
-http://localhost:5173
+http://localhost:8080
+```
+
+Jika terminal Vite menampilkan port yang berbeda, gunakan alamat yang muncul pada bagian `Local`.
+
+Contoh output Vite:
+
+```bash
+Local: http://localhost:8080/
 ```
 
 ---
@@ -347,14 +390,16 @@ http://localhost:5173
 Untuk testing lokal, buka game dengan parameter session:
 
 ```bash
-http://localhost:5173/?session_id=dev-player-1&session_token=dev-token-1&api_base_url=http://localhost:8000&event_slug=local-event&expires_at=2099-12-31T23:59:59Z
+http://localhost:8080/?session_id=dev-player-1&session_token=dev-token-1&api_base_url=http://localhost:8000&event_slug=local-event&expires_at=2099-12-31T23:59:59Z
 ```
 
 Untuk testing multiplayer, buka browser kedua atau incognito dengan `session_id` berbeda:
 
 ```bash
-http://localhost:5173/?session_id=dev-player-2&session_token=dev-token-2&api_base_url=http://localhost:8000&event_slug=local-event&expires_at=2099-12-31T23:59:59Z
+http://localhost:8080/?session_id=dev-player-2&session_token=dev-token-2&api_base_url=http://localhost:8000&event_slug=local-event&expires_at=2099-12-31T23:59:59Z
 ```
+
+> Catatan: `api_base_url=http://localhost:8000` digunakan untuk koneksi ke CMS/API lokal. Jika CMS/API belum berjalan, game masih dapat terbuka, tetapi konfigurasi atau submit score ke CMS dapat gagal.
 
 ---
 
@@ -630,13 +675,58 @@ npm run dev
 
 ---
 
-### 8. Port 3000 sudah digunakan
+### 8. Halaman `localhost:8080` tidak bisa dibuka
+
+Jika browser menampilkan:
+
+```bash
+This site can't be reached
+ERR_CONNECTION_REFUSED
+```
+
+Artinya frontend Vite belum berjalan atau terminal `npm run dev` sudah tertutup.
+
+Jalankan kembali pada folder utama project:
+
+```bash
+npm run dev
+```
+
+Lalu buka alamat yang muncul pada output Vite, contoh:
+
+```bash
+http://localhost:8080
+```
+
+---
+
+### 9. Masih membuka `localhost:5173`
+
+Project ini berjalan pada port `8080`, bukan `5173`.
+
+Gunakan:
+
+```bash
+http://localhost:8080
+```
+
+Bukan:
+
+```bash
+http://localhost:5173
+```
+
+Jika Vite menampilkan port lain, gunakan port yang muncul di terminal.
+
+---
+
+### 10. Port 3000 sudah digunakan
 
 Jika backend gagal berjalan karena port `3000` sudah digunakan, hentikan proses yang memakai port tersebut atau ubah port pada `server.js`.
 
 ---
 
-### 9. Port Redis 6379 sudah digunakan
+### 11. Port Redis 6379 sudah digunakan
 
 Jika Redis gagal berjalan karena port `6379` sudah digunakan, cek container yang aktif:
 
@@ -655,7 +745,7 @@ docker run --name phantom-redis -p 6379:6379 -d redis
 
 ---
 
-### 10. Asset game tidak muncul
+### 12. Asset game tidak muncul
 
 Pastikan asset masih berada di folder:
 
@@ -673,8 +763,10 @@ Jangan menghapus atau mengubah nama asset yang sudah digunakan oleh scene game.
 * Game membutuhkan frontend dan backend agar multiplayer dapat berjalan.
 * Redis wajib aktif sebelum menjalankan backend.
 * Redis di Windows dijalankan menggunakan Docker Desktop.
+* Nama container Redis bebas, selama port tetap `6379`.
 * Backend berjalan pada port `3000`.
-* Frontend berjalan pada port `5173`.
+* Frontend pada project ini berjalan pada port `8080`.
+* Jika Vite menampilkan port berbeda, gunakan alamat yang muncul pada terminal.
 * Frontend membaca alamat backend dari file `.env`.
 * Untuk laptop yang sama, gunakan `VITE_SERVER_URL=http://localhost:3000`.
 * Untuk jaringan/IP tertentu, sesuaikan `VITE_SERVER_URL` dengan alamat backend.
