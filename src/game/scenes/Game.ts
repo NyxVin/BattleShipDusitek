@@ -75,7 +75,12 @@ export class Game extends Scene {
 
     this.shipsUI.forEach((ship) => {
       ship.cooldown = cooldowns?.[ship.key] ?? ship.cooldown;
+
+      // Reset state cooldown setiap masuk match baru
+      ship.cooldownLeft = 0;
+      ship.cooldownActive = false;
     });
+
     console.log("DPR:", window.devicePixelRatio);
     this.sfx = {
       misil: this.sound.add("misil"),

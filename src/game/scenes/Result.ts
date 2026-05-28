@@ -32,7 +32,6 @@ export class Result extends Phaser.Scene {
 
     const { width, height } = this.scale;
 
-
     if (!this.resultData || !this.resultData.winner) {
       console.error("❌ RESULT DATA INVALID");
       this.scene.start("MainMenu");
@@ -43,19 +42,26 @@ export class Result extends Phaser.Scene {
     console.log("🔥 RESULT DATA:", data);
 
     const isWin = data.winner === data.myId;
-    setTimeout(() => {
-      submitScore({
-        roomCode: this.registry.get("roomCode"),
+    const matchMode = this.registry.get("matchMode");
 
-        score: data.score,
-        result: isWin ? "win" : "loss",
+    if (matchMode === "random") {
+      setTimeout(() => {
+        submitScore({
+          roomCode: this.registry.get("roomCode"),
 
-        totalAttack: data.total,
-        hitCount: data.hit,
-        missCount: data.miss,
-        accuracy: data.accuracy,
-      });
-    }, 100);
+          score: data.score,
+          result: isWin ? "win" : "loss",
+
+          totalAttack: data.total,
+          hitCount: data.hit,
+          missCount: data.miss,
+          accuracy: data.accuracy,
+        });
+      }, 100);
+    } else {
+      console.log("ℹ️ MODE TEMAN: SCORE TIDAK DIKIRIM");
+    }
+
     if (this.sound.get("winner")) this.sound.stopByKey("winner");
     if (this.sound.get("lose")) this.sound.stopByKey("lose");
 

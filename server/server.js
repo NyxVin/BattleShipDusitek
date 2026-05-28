@@ -574,24 +574,28 @@ async function finishByForfeit(roomCode, loserId) {
     reason: "DISCONNECT_TIMEOUT",
   });
 
-  await Promise.allSettled([
-    submitScoreFromServer(
-      getPlayerSession(room, winnerId),
-      {
-        score: winnerScore.score,
-        result: "win",
-      },
-      roomCode,
-    ),
-    submitScoreFromServer(
-      getPlayerSession(room, loserId),
-      {
-        score: loserScore.score,
-        result: "loss",
-      },
-      roomCode,
-    ),
-  ]);
+  if (room.matchMode === "random") {
+    await Promise.allSettled([
+      submitScoreFromServer(
+        getPlayerSession(room, winnerId),
+        {
+          score: winnerScore.score,
+          result: "win",
+        },
+        roomCode,
+      ),
+      submitScoreFromServer(
+        getPlayerSession(room, loserId),
+        {
+          score: loserScore.score,
+          result: "loss",
+        },
+        roomCode,
+      ),
+    ]);
+  } else {
+    console.log("ℹ️ MODE TEMAN: SERVER TIDAK SUBMIT SCORE DISCONNECT TIMEOUT");
+  }
 
   io.to(roomCode).emit("gameOver", {
     winner: winnerId,
@@ -897,22 +901,32 @@ io.on("connection", async (socket) => {
   // Membuat room private menggunakan kode room.
   // Player pembuat room akan menjadi host.
   socket.on("createRoom", async () => {
+    const user = connectedUsers[socket.id];==
+
+    if (!user) {
+      console.log("❌ CREATE ROOM DITOLAK: SOCKET BELUM AUTH");
+      socket.emit("authRequired", "Socket belum auth");
+      return;
+    }
+
     const roomCount = Object.keys(rooms).length;
 
     if (roomCount > 200) {
       socket.emit("error", "Server penuh");
       return;
     }
+
     if (!GAME_CONFIG) {
       console.log("❌ CONFIG BELUM MASUK!");
       socket.emit("error", "Config belum siap");
       return;
     }
+
     const code = generateRoomCode();
 
     const newRoom = {
       code,
-      host: connectedUsers[socket.id].sessionId,
+      host: user.sessionId,
       guest: null,
       hostSocket: socket.id,
       guestSocket: null,
@@ -923,6 +937,7 @@ io.on("connection", async (socket) => {
       currentTurn: null,
       hasAttacked: false,
       timeLeft: GAME_CONFIG ? GAME_CONFIG.turn_time : 15,
+      matchMode: "friend",
       createdAt: Date.now(),
       disconnectedPlayers: {},
       bothOfflineAt: null,
@@ -942,6 +957,14 @@ io.on("connection", async (socket) => {
   // Guest masuk ke room private menggunakan kode room.
   // Jika room valid dan belum penuh, kedua player diarahkan ke fase placement.
   socket.on("joinRoom", async (code) => {
+    const user = connectedUsers[socket.id];
+
+    if (!user) {
+      console.log("❌ JOIN ROOM DITOLAK: SOCKET BELUM AUTH");
+      socket.emit("authRequired", "Socket belum auth");
+      return;
+    }
+
     let room = await getRoom(code);
 
     if (!room) {
@@ -954,7 +977,7 @@ io.on("connection", async (socket) => {
       return;
     }
 
-    room.guest = connectedUsers[socket.id].sessionId;
+    room.guest = user.sessionId;
     room.guestSocket = socket.id;
     await saveRoom(code, room);
     rooms[code] = room; // biar logic lama tetap jalan
@@ -1037,6 +1060,7 @@ io.on("connection", async (socket) => {
         currentTurn: null,
         hasAttacked: false,
         timeLeft: GAME_CONFIG ? GAME_CONFIG.turn_time : 15,
+        matchMode: "random",
         createdAt: Date.now(),
         disconnectedPlayers: {},
         bothOfflineAt: null,
@@ -1337,10 +1361,10 @@ io.on("connection", async (socket) => {
       const enemyDestroyed = isAllShipsDestroyed(enemyShips, room.hits[enemy]);
 
       io.to(roomCode).emit("attackResult", {
-  cells: results,
-  attackerId: player,
-  sunkShips,
-});
+        cells: results,
+        attackerId: player,
+        sunkShips,
+      });
 
       if (enemyDestroyed) {
         if (roomIntervals[roomCode]) {

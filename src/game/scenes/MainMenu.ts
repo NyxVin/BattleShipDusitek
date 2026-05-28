@@ -566,7 +566,7 @@ export class MainMenu extends Scene {
       const formattedCode = this.joinCode.substring(0, 2) + "-" + this.joinCode.substring(2);
 
       console.log("JOIN CODE:", formattedCode);
-
+      this.registry.set("matchMode", "friend");
       socket.emit("joinRoom", formattedCode);
     });
 
@@ -663,12 +663,15 @@ export class MainMenu extends Scene {
         return;
       }
 
+      this.registry.set("matchMode", "random");
+
       socket.emit("findMatch");
       if (!isAuthenticated) {
         console.log("❌ BELUM AUTH");
 
         return;
       }
+
       cancelButton.on("pointerdown", () => {
         isSearching = false; // 🔥 RESET BIAR BISA SEARCH LAGI
 
@@ -700,6 +703,8 @@ export class MainMenu extends Scene {
 
     createRoomButton.on("pointerdown", () => {
       console.log("🔥 CREATE ROOM CLICK");
+
+      this.registry.set("matchMode", "friend");
 
       socket.emit("createRoom");
     });
