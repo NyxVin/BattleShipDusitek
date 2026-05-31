@@ -15,7 +15,7 @@ export async function loadConfig() {
     }
 
     // Bentuk endpoint CMS
-    const url = `${apiBaseUrl}/event/${eventSlug}/game-config`;
+    const url = `${apiBaseUrl}/events/${eventSlug}/game-config`;
 
     console.log("LOAD CONFIG FROM:", url);
 
