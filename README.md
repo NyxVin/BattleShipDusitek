@@ -18,6 +18,12 @@ Project ini menggunakan **Phaser** sebagai game engine, **Vite** sebagai fronten
 * [Dependencies](#-dependencies)
 * [Troubleshooting](#-troubleshooting)
 * [Notes](#-notes)
+* [Fitur Utama Game](#-fitur-utama-game)
+* [Flow Data](#-flow-data)
+* [Flow Aplikasi](#-flow-aplikasi)
+* [Text / Informasi Game](#-text--informasi-game)
+* [Arsitektur Sistem](#-arsitektur-sistem)
+* [Deployment](#-deployment)
 
 ---
 
@@ -775,3 +781,331 @@ Jangan menghapus atau mengubah nama asset yang sudah digunakan oleh scene game.
 * Jika konfigurasi CMS gagal dimuat, game akan menggunakan konfigurasi default.
 * Submit score membutuhkan endpoint CMS/API yang aktif.
 * Folder `public/assets/` dan `public/fonts/` tidak boleh dihapus karena digunakan oleh game.
+
+---
+
+## 🎮 Fitur Utama Game
+
+Game **Phantom Breach** memiliki beberapa fitur utama yang mendukung gameplay multiplayer secara real-time. Fitur-fitur ini dibuat agar pemain dapat bermain dalam dua mode, menempatkan battle ship, menyerang lawan secara bergantian, serta mendapatkan hasil pertandingan di akhir permainan.
+
+| Fitur                  | Keterangan                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| Multiplayer Real-time  | Game dimainkan oleh dua player secara langsung menggunakan Socket.IO                   |
+| Mode Random            | Player akan dicocokkan dengan player lain secara otomatis                              |
+| Mode Teman             | Player dapat bermain dengan teman menggunakan room code                                |
+| Placement Kapal        | Player dapat menempatkan battle ship pada board sendiri sebelum battle dimulai         |
+| Shuffle Kapal          | Player dapat menyusun posisi kapal secara otomatis                                     |
+| Battle Turn-based      | Player menyerang board lawan secara bergantian berdasarkan giliran                     |
+| Hit dan Miss           | Sistem menampilkan hasil serangan apakah mengenai kapal atau tidak                     |
+| Reveal Kapal Tenggelam | Kapal lawan akan ditampilkan ketika seluruh bagian kapal tersebut berhasil dihancurkan |
+| Result Game            | Sistem menampilkan hasil akhir berupa menang atau kalah                                |
+| Submit Score           | Score dikirim ke CMS/API setelah game selesai pada mode tertentu                       |
+| Disconnect Handling    | Sistem dapat mendeteksi player yang keluar atau koneksi terputus                       |
+| Redis Support          | Redis digunakan untuk membantu penyimpanan data sementara pada sistem multiplayer      |
+
+---
+
+## 🔄 Flow Data
+
+Flow data menjelaskan bagaimana data berpindah dari player, frontend, backend, Redis, hingga CMS/API.
+
+Pertama, player membuka game melalui URL yang berisi data session. Data tersebut digunakan oleh frontend untuk mengenali session player dan kebutuhan integrasi dengan CMS/API.
+
+Contoh data yang dibaca dari URL:
+
+| Data            | Fungsi                        |
+| --------------- | ----------------------------- |
+| `session_id`    | Identitas session player      |
+| `session_token` | Token validasi session        |
+| `api_base_url`  | Alamat CMS/API yang digunakan |
+| `event_slug`    | Identitas event game          |
+| `expires_at`    | Batas waktu session game      |
+
+Setelah data session terbaca, frontend akan menghubungkan player ke backend melalui Socket.IO. Backend kemudian mengatur room, matchmaking, giliran bermain, serangan, hasil hit/miss, disconnect, dan hasil akhir pertandingan.
+
+Redis digunakan sebagai penyimpanan sementara untuk membantu backend menyimpan data multiplayer seperti room dan state permainan.
+
+Jika permainan selesai dan mode game mengizinkan submit score, maka frontend akan mengirim data hasil permainan ke CMS/API.
+
+```txt
+Player membuka URL game
+        ↓
+Frontend membaca data session
+        ↓
+Frontend connect ke backend menggunakan Socket.IO
+        ↓
+Backend mengatur room dan gameplay multiplayer
+        ↓
+Redis menyimpan data sementara room/state game
+        ↓
+Game selesai dan masuk Result
+        ↓
+Score dikirim ke CMS/API jika diperlukan
+```
+
+Ringkasan flow data:
+
+```txt
+Player
+→ Browser
+→ Frontend Phaser
+→ Socket.IO Client
+→ Backend Socket.IO Server
+→ Redis
+→ Result Game
+→ CMS/API Submit Score
+```
+
+---
+
+## 🧭 Flow Aplikasi
+
+Flow aplikasi menjelaskan alur penggunaan game dari awal player membuka game sampai hasil pertandingan ditampilkan.
+
+```txt
+Buka URL Game
+→ Validasi Session
+→ Main Menu
+→ Pilih Mode Game
+→ Masuk Room
+→ Placement Kapal
+→ Battle
+→ Result
+→ Submit Score
+```
+
+Penjelasan alur aplikasi:
+
+| Tahap            | Keterangan                                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Buka URL Game    | Player membuka game dari link yang sudah memiliki parameter session                                                    |
+| Validasi Session | Sistem membaca dan mengecek data seperti `session_id`, `session_token`, `api_base_url`, `event_slug`, dan `expires_at` |
+| Main Menu        | Player masuk ke menu utama game                                                                                        |
+| Pilih Mode Game  | Player memilih mode Random atau mode Teman                                                                             |
+| Masuk Room       | Sistem membuat room atau memasukkan player ke room yang tersedia                                                       |
+| Placement Kapal  | Player menyusun battle ship pada board sendiri                                                                         |
+| Battle           | Player menyerang board lawan secara bergantian                                                                         |
+| Result           | Sistem menampilkan hasil akhir pertandingan                                                                            |
+| Submit Score     | Score dikirim ke CMS/API jika mode game mengizinkan                                                                    |
+
+Pada **mode Random**, score dikirim ke CMS/API karena mode ini digunakan untuk kebutuhan event, leaderboard, atau reward.
+
+Pada **mode Teman**, score tidak dikirim ke CMS/API karena mode ini hanya digunakan untuk bermain bersama teman.
+
+---
+
+## 💬 Text / Informasi Game
+
+Text atau informasi game digunakan untuk memberikan feedback kepada player selama permainan berlangsung. Informasi ini membantu player memahami status game, giliran bermain, hasil serangan, dan hasil akhir pertandingan.
+
+| Kondisi              | Informasi yang Ditampilkan                             |
+| -------------------- | ------------------------------------------------------ |
+| Menunggu Lawan       | Player sedang menunggu opponent masuk ke room          |
+| Room Dibuat          | Room berhasil dibuat untuk mode Teman                  |
+| Join Room            | Player berhasil masuk ke room teman                    |
+| Placement            | Player diminta menyusun battle ship pada board sendiri |
+| Shuffle              | Posisi kapal diacak secara otomatis                    |
+| Ready                | Player sudah siap untuk masuk ke battle                |
+| Your Turn            | Giliran player untuk menyerang board lawan             |
+| Enemy Turn           | Giliran lawan untuk menyerang                          |
+| Hit                  | Serangan berhasil mengenai kapal lawan                 |
+| Miss                 | Serangan tidak mengenai kapal lawan                    |
+| Ship Sunk            | Kapal lawan berhasil dihancurkan sepenuhnya            |
+| Win                  | Player memenangkan pertandingan                        |
+| Lose                 | Player kalah dalam pertandingan                        |
+| Disconnect           | Lawan keluar atau koneksi terputus                     |
+| Reconnect            | Player kembali masuk ke game setelah koneksi terputus  |
+| Session Expired      | Session game sudah melewati batas waktu                |
+| Submit Score Success | Score berhasil dikirim ke CMS/API                      |
+| Submit Score Failed  | Score gagal dikirim ke CMS/API                         |
+
+Text tersebut tidak hanya berfungsi sebagai tampilan, tetapi juga sebagai penanda kondisi game agar player mengetahui apa yang sedang terjadi.
+
+---
+
+## 🏗 Arsitektur Sistem
+
+Arsitektur sistem **Phantom Breach** terdiri dari beberapa komponen utama, yaitu frontend game, backend server, Redis, dan CMS/API.
+
+```txt
++------------------+
+|  Browser Player  |
++------------------+
+          |
+          v
++------------------------------+
+| Frontend Game                |
+| Phaser + TypeScript + Vite   |
++------------------------------+
+          |
+          | Socket.IO Client
+          v
++------------------------------+
+| Backend Server               |
+| Node.js + Express + Socket.IO|
++------------------------------+
+          |
+          v
++------------------+
+| Redis Server     |
++------------------+
+          |
+          v
++------------------+
+| CMS / API        |
++------------------+
+```
+
+Penjelasan komponen:
+
+| Komponen         | Fungsi                                                                                    |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| Browser Player   | Tempat player membuka dan memainkan game                                                  |
+| Frontend Game    | Menampilkan scene game, board, asset, audio, tombol, dan interaksi player                 |
+| Phaser           | Game engine yang digunakan untuk mengatur scene, sprite, animasi, dan gameplay            |
+| TypeScript       | Bahasa yang digunakan pada sisi frontend game                                             |
+| Vite             | Development server dan build tool untuk frontend                                          |
+| Socket.IO Client | Menghubungkan frontend ke backend secara real-time                                        |
+| Backend Server   | Mengatur room, matchmaking, turn, serangan, disconnect, reconnect, dan hasil pertandingan |
+| Express          | Framework backend untuk menjalankan server HTTP                                           |
+| Socket.IO        | Mengatur komunikasi real-time antara dua player                                           |
+| Redis            | Menyimpan data sementara untuk kebutuhan multiplayer                                      |
+| CMS/API          | Mengirim konfigurasi game dan menerima submit score                                       |
+
+Dengan arsitektur ini, frontend tidak berjalan sendiri. Frontend hanya menampilkan game dan mengirim aksi player, sedangkan backend menjadi pengatur utama sistem multiplayer.
+
+---
+
+## 🚀 Deployment
+
+Deployment adalah proses menjalankan game agar dapat digunakan di server atau lingkungan production. Pada game **Phantom Breach**, deployment dibagi menjadi beberapa bagian, yaitu frontend, backend, Redis, dan CMS/API.
+
+### 1. Deployment Frontend
+
+Frontend dibuild menggunakan perintah:
+
+```bash
+npm run build
+```
+
+Setelah proses build berhasil, hasil build akan berada di folder:
+
+```bash
+dist/
+```
+
+Folder `dist/` tersebut dapat diupload ke hosting frontend atau web server.
+
+Sebelum build, pastikan file `.env` sudah mengarah ke backend yang benar.
+
+Contoh:
+
+```env
+VITE_SERVER_URL=http://localhost:3000
+```
+
+Jika backend sudah berada di server, maka sesuaikan dengan alamat backend server.
+
+Contoh:
+
+```env
+VITE_SERVER_URL=http://alamat-backend-server:3000
+```
+
+---
+
+### 2. Deployment Backend
+
+Backend dijalankan dari folder `server`.
+
+```bash
+cd server
+node server.js
+```
+
+Backend harus berjalan agar fitur multiplayer dapat digunakan. Jika backend tidak aktif, player tidak dapat melakukan matchmaking, masuk room, atau bermain secara real-time.
+
+Backend secara default berjalan pada port:
+
+```txt
+3000
+```
+
+---
+
+### 3. Deployment Redis
+
+Redis harus aktif sebelum backend dijalankan karena backend membutuhkan Redis untuk mendukung penyimpanan data sementara multiplayer.
+
+Jika menggunakan Docker, Redis dapat dijalankan dengan:
+
+```bash
+docker start phantom-redis
+```
+
+Cek koneksi Redis:
+
+```bash
+docker exec -it phantom-redis redis-cli ping
+```
+
+Output yang benar:
+
+```bash
+PONG
+```
+
+Jika Redis tidak aktif, backend dapat mengalami error saat mencoba menghubungkan sistem multiplayer ke Redis.
+
+---
+
+### 4. Deployment CMS/API
+
+CMS/API digunakan untuk mengambil konfigurasi game dan mengirim score player setelah pertandingan selesai.
+
+Agar submit score berjalan, pastikan:
+
+| Kebutuhan                   | Keterangan                                |
+| --------------------------- | ----------------------------------------- |
+| `api_base_url` benar        | URL mengarah ke CMS/API yang aktif        |
+| `session_id` tersedia       | Session player terbaca dari URL           |
+| `session_token` tersedia    | Token validasi session tersedia           |
+| `event_slug` tersedia       | Event game terbaca                        |
+| Endpoint submit score aktif | CMS/API dapat menerima hasil pertandingan |
+
+Jika CMS/API belum aktif, game masih dapat dijalankan untuk testing, tetapi fitur konfigurasi dari CMS dan submit score dapat gagal.
+
+---
+
+### 5. Urutan Deployment
+
+Urutan deployment yang disarankan:
+
+```txt
+1. Siapkan Redis Server
+2. Jalankan Redis Server
+3. Jalankan Backend Socket.IO Server
+4. Atur file .env frontend agar mengarah ke backend
+5. Build frontend menggunakan npm run build
+6. Upload folder dist ke hosting/web server
+7. Pastikan CMS/API aktif jika menggunakan submit score
+8. Test game menggunakan dua browser atau mode incognito
+```
+
+---
+
+### 6. Checklist Deployment
+
+| Checklist                            | Status                              |
+| ------------------------------------ | ----------------------------------- |
+| Node.js sudah terinstall             | Wajib                               |
+| Dependency frontend sudah terinstall | Wajib                               |
+| Dependency backend sudah terinstall  | Wajib                               |
+| Redis aktif                          | Wajib                               |
+| Backend berjalan                     | Wajib                               |
+| File `.env` sudah benar              | Wajib                               |
+| Frontend berhasil dibuild            | Wajib                               |
+| Folder `dist/` tersedia              | Wajib                               |
+| Asset game tersedia                  | Wajib                               |
+| CMS/API aktif                        | Wajib jika menggunakan submit score |
+| Testing multiplayer berhasil         | Wajib                               |
